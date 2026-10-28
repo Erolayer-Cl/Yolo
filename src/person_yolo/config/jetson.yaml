@@ -1,0 +1,96 @@
+# Configuración para el dron real: Jetson a bordo + cámara USB/CSI + Pixhawk
+# por uXRCE-DDS. Foxglove se conecta desde tierra por WiFi a ws://<ip-jetson>:8765.
+
+camera_node:
+  ros__parameters:
+    source: '0'                  # '/dev/video0', o pipeline GStreamer para CSI:
+    # source: 'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=1920,height=1080,framerate=30/1 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! appsink drop=1 max-buffers=1'
+    width: 1920
+    height: 1080
+    fps: 30.0
+    fourcc: MJPG
+    topic: /camera
+
+person_detector:
+  ros__parameters:
+    image_topic: /camera
+    # TensorRT exportado en ESTA Jetson (scripts/export_trt.sh). Un .engine no
+    # es portable entre máquinas ni versiones de TensorRT.
+    model: models/yolo11n.engine
+    device: cuda:0
+    imgsz: 640                   # tiene que coincidir con el export
+    conf: 0.35
+    iou: 0.45
+    half: true                   # ignorado con .engine (ya es fp16)
+    person_class_names: [person, pedestrian, people]
+    max_rate_hz: 8.0
+
+    tiling:
+      enabled: true
+      tile_size: 640             # = imgsz del export
+      overlap: 0.15              # 1080p -> 8 tiles
+      conf: 0.25
+      every_n_frames: 2          # la Jetson no da para tiles en todos los frames
+      batch_size: 8              # = batch del export (dynamic) ; 1 si exportaste batch=1
+      merge_thr: 0.5
+      merge_metric: ios
+
+    counting:
+      min_hits: 3
+      max_age_sec: 1.5
+      max_missed: 3              # en frames con tiles; inferencia lenta no recuenta a quien se sigue viendo
+      iou_thr: 0.2
+      dist_thr: 1.5              # a 8 Hz la persona se corre más entre frames
+
+    annotated_scale: 0.5         # 960x540 por WiFi
+    jpeg_quality: 60
+    draw_tiles: false
+    events_csv: ~/yolo_flights/events.csv
+    log_period_sec: 5.0
+    stale_sec: 2.0               # si se corta la Pixhawk, alertas "sin GPS" (no la posición vieja)
+
+fpv_node:
+  ros__parameters:
+    # Desde tierra: http://<ip-jetson>:8080. Por WiFi sirve para MIRAR, no para
+    # pilotear (100-300 ms de lag): para eso, un sistema FPV dedicado.
+    image_topic: /camera
+    port: 8080
+    bind_address: 0.0.0.0
+    scale: 0.5                   # 960x540 por WiFi
+    jpeg_quality: 60
+    max_fps: 20.0
+    boxes_default: true
+    boxes_max_age_sec: 0.8
+
+gps_node:
+  ros__parameters:
+    # Pixhawk con PX4 v1.17.0. px4_msgs tiene que ser el de esa versión:
+    #   ./scripts/vendor_px4_msgs.sh release/1.17
+    # Los mensajes versionados llevan sufijo _vN (ros2 topic list | grep fmu).
+    gps_topic: /fmu/out/vehicle_gps_position
+    local_position_topic: /fmu/out/vehicle_local_position_v1
+    status_topic: /fmu/out/vehicle_status_v1
+    pose_rate_hz: 20.0
+
+trail_node:
+  ros__parameters:
+    min_step_m: 1.0
+    max_points: 5000
+    det_merge_m: 5.0
+    det_merge_sec: 10.0
+    publish_rate_hz: 1.0
+    output_dir: ~/yolo_flights
+    save_period_sec: 10.0
+
+foxglove_bridge:
+  ros__parameters:
+    port: 8765
+    address: 0.0.0.0
+    # Por WiFi NO mandar la imagen cruda (/camera): satura el enlace.
+    topic_whitelist:
+      - '/yolo/image_annotated/compressed'
+      - '/yolo/person_count'
+      - '/yolo/person_total'
+      - '/yolo/person_alert'
+      - '/yolo/person_events'
+      - '/drone/.*'

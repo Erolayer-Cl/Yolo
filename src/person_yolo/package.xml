@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>person_yolo</name>
+  <version>0.1.0</version>
+  <description>
+    Demo de vuelo manual: deteccion de personas lejanas y cercanas con YOLO
+    (frame completo + tiling), GPS del dron desde PX4 y recorrido en el mapa
+    con los lugares donde se vieron personas.
+
+    ultralytics y torch NO se instalan por rosdep: ver README.md.
+    foxglove_msgs es opcional (linea del recorrido en el panel Map).
+  </description>
+  <maintainer email="ibanezignacio2005@gmail.com">matias</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>vision_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>cv_bridge</depend>
+  <depend>px4_msgs</depend>
+  <exec_depend>foxglove_bridge</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

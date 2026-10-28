@@ -1,0 +1,85 @@
+# Configuración para SITL con Unreal + Cosys-AirSim (launch_sitl.sh).
+# airsim_node publica la cámara en /camera (remapeado en launch_sitl.sh).
+#
+# Para cambiar de peso: cambiá `model`. Rutas relativas se buscan en el
+# directorio actual y en $YOLO_WS/models/ (launch_sitl.sh exporta YOLO_WS).
+
+person_detector:
+  ros__parameters:
+    image_topic: /camera
+    model: yolo11n.pt            # oficial: ultralytics lo descarga solo la 1ra vez
+    device: auto                 # cuda:0 si hay GPU, si no cpu
+    imgsz: 640                   # pasada de frame completo (personas cercanas)
+    conf: 0.35
+    iou: 0.45
+    half: true
+    # Ids de clase explícitos (vacío = buscar por nombre en person_class_names).
+    # COCO: person = 0. Pesos VisDrone suelen tener 'pedestrian' y 'people'.
+    person_class_names: [person, pedestrian, people]
+    max_rate_hz: 30.0
+
+    # Personas lejanas: tiles a resolución nativa. Solo aporta si la cámara
+    # es más grande que tile_size: con el 640x360 de la beta NO sirve -> subí
+    # front_cam a 1920x1080 en settings.json (ver README).
+    tiling:
+      enabled: true
+      tile_size: 640
+      overlap: 0.1
+      conf: 0.25                 # más bajo: una persona lejana da menos score
+      every_n_frames: 4          # 2-4 para ahorrar GPU (1 satura la PC con Unreal)
+      batch_size: 0              # 0 = todos los tiles en un solo batch
+      merge_thr: 0.5
+      merge_metric: ios          # ios elimina la caja chica dentro de la grande
+
+    # Conteo de personas DISTINTAS (/yolo/person_total, ver tracker.py)
+    counting:
+      min_hits: 3                # frames con detección para contar a alguien
+      max_age_sec: 1.5           # sin verlo más que esto...
+      max_missed: 3              # ...y en 3 frames CON tiles seguidos -> si vuelve, cuenta de nuevo
+      iou_thr: 0.2
+      dist_thr: 1.0              # salto máx. del centro, en diagonales de la caja
+
+    annotated_scale: 1.0
+    jpeg_quality: 75
+    draw_tiles: false            # grilla de tiles en la imagen (debug)
+    events_csv: ''               # ej. ~/yolo_flights/events.csv
+    log_period_sec: 5.0
+    stale_sec: 2.0               # GPS/pose más viejos que esto = alerta "sin GPS"
+
+fpv_node:
+  ros__parameters:
+    # Video FPV en http://localhost:8080 (Y = mostrar/ocultar cajas YOLO).
+    image_topic: /camera
+    port: 8080
+    bind_address: 0.0.0.0
+    scale: 1.0
+    jpeg_quality: 80
+    max_fps: 30.0
+    boxes_default: true          # vista inicial: con cajas
+    boxes_max_age_sec: 0.6       # cajas más viejas que esto no se dibujan
+
+gps_node:
+  ros__parameters:
+    gps_topic: /fmu/out/vehicle_gps_position
+    # SITL con PX4 v1.17.0, igual que la Pixhawk real (launch_sitl.sh).
+    # Los mensajes versionados llevan sufijo _vN (ros2 topic list | grep fmu).
+    local_position_topic: /fmu/out/vehicle_local_position_v1
+    status_topic: /fmu/out/vehicle_status_v1
+    pose_rate_hz: 20.0
+
+trail_node:
+  ros__parameters:
+    min_step_m: 1.0              # un punto nuevo cada 1 m recorrido
+    max_points: 5000             # al pasarse, se ralea (se sigue viendo todo)
+    det_merge_m: 5.0             # detecciones a <5 m y <10 s = un solo punto rojo
+    det_merge_sec: 10.0
+    publish_rate_hz: 1.0
+    output_dir: ~/yolo_flights   # trail.kml / .geojson / .csv por vuelo
+    save_period_sec: 10.0
+
+foxglove_bridge:
+  ros__parameters:
+    port: 8765
+    address: 0.0.0.0
+    # En SITL todo es local: se expone todo.
+    topic_whitelist: ['.*']
