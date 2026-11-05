@@ -70,10 +70,11 @@ class PersonCounter:
     _next_id: int = 1
 
     def reset(self):
+        """Total a 0. Los ids NO se reutilizan: en el mapa quedan las personas
+        anteriores, y otro '#1' se confundiría con ellas."""
         self.tracks = []
         self.total = 0
         self.new_ids = []
-        self._next_id = 1
 
     def update(self, boxes, t: float) -> np.ndarray:
         """Asocia las cajas (N, >=4) del instante `t` (segundos) a tracks.
@@ -92,12 +93,16 @@ class PersonCounter:
         pairs = []
         for ti, tr in enumerate(self.tracks):
             pred = tr.predicted(t)
-            c_pred = _center(pred)
+            c_pred, c_last = _center(pred), _center(tr.box)
             scale = max(self.min_size_px, float(np.hypot(pred[2] - pred[0],
                                                          pred[3] - pred[1])))
             for di in range(len(boxes)):
                 b = boxes[di, :4]
-                dist = float(np.linalg.norm(_center(b) - c_pred)) / scale
+                # También contra la última posición: tras un hueco, una velocidad
+                # con ruido lleva la predicción lejos de una persona que no se movió.
+                c = _center(b)
+                dist = min(float(np.linalg.norm(c - c_pred)),
+                           float(np.linalg.norm(c - c_last))) / scale
                 if dist <= self.dist_thr or _iou(pred, b) >= self.iou_thr:
                     pairs.append((dist, ti, di))
         pairs.sort()
@@ -138,8 +143,3 @@ class PersonCounter:
             self._next_id += 1
             self.total += 1
             self.new_ids.append(tr.id)
-
-    @property
-    def active(self) -> int:
-        """Personas confirmadas que se están siguiendo ahora."""
-        return sum(1 for tr in self.tracks if tr.id)

@@ -4,7 +4,9 @@ El dron se vuela **a mano con la radio** y, mientras tanto:
 
 - YOLO detecta **personas cercanas y lejanas** en la cámara (frame completo + *tiling*).
 - Cada persona se cuenta **una sola vez** mientras siga a la vista (`/yolo/person_total`) y
-  cada persona nueva genera una **alerta** con la posición GPS del dron (`/yolo/person_alert`).
+  cada persona nueva genera una **alerta** con **su posición en el suelo** (lat/lon y error
+  estimado), calculada con la actitud del dron, la cámara y un **lidar hacia abajo**
+  (`/yolo/person_alert`). Ver [Ubicación de las personas](#ubicación-de-las-personas).
 - Se publica el **GPS** del dron (dónde está en cada momento).
 - Queda dibujado **por dónde pasó** el dron y **dónde vio personas** (mapa de Foxglove
   y archivos KML/GeoJSON/CSV que se abren después del vuelo).
@@ -30,12 +32,13 @@ YOLO/
     ├── launch/demo.launch.py
     └── person_yolo/
         ├── person_detector.py      YOLO full + tiles, conteo, alertas con GPS
-        ├── gps_node.py             PX4 -> /drone/gps, /drone/pose, /drone/status
+        ├── gps_node.py             PX4 -> /drone/gps, pose, status, attitude, agl
         ├── trail_node.py           recorrido + puntos de personas (mapa, archivos)
         ├── fpv_node.py             video FPV + HUD en http://<host>:8080 (cajas on/off)
         ├── overlay.py              dibujos (cajas, HUD, cruz), con tests
         ├── camera_node.py          cámara USB/CSI (solo dron real)
         ├── tracker.py              conteo de personas distintas (ids)
+        ├── geolocate.py            píxel de la persona -> lat/lon en el suelo
         ├── tiling.py, trail.py,
         │   model_path.py           lógica pura, con tests (pytest sin ROS, en test/)
         └── node_main.py            cierre limpio con Ctrl-C (guarda el recorrido)
@@ -48,16 +51,20 @@ YOLO/
 | `/drone/gps` | `sensor_msgs/NavSatFix` | posición GPS actual (panel **Map**) |
 | `/drone/pose` | `geometry_msgs/PoseStamped` | posición local ENU, `z` = altura sobre home |
 | `/drone/status` | `std_msgs/String` (JSON) | armado, modo, fix, satélites, altura, rumbo |
-| `/drone/trail_geojson` | `foxglove_msgs/GeoJSON` | **recorrido** + home + **puntos rojos de personas** (panel **Map**) |
+| `/drone/attitude` | `geometry_msgs/QuaternionStamped` | actitud completa de PX4 (`ned`, FRD→NED) para ubicar personas |
+| `/drone/agl` | `sensor_msgs/Range` | altura sobre el terreno del EKF, solo si la mide el lidar |
+| `/drone/trail_geojson` | `foxglove_msgs/GeoJSON` | **recorrido** + home + **un punto por persona** + zona de búsqueda y grilla en metros (panel **Map**) |
+| `/rescue/waypoints` | `std_msgs/String` (JSON) | **coordenadas de rescate** de cada persona (panel **Raw Messages**); sin ubicar: `lat`/`lon` en `null` |
 | `/yolo/person_count` | `std_msgs/Int32` | personas en el frame (panel **Plot**) |
 | `/yolo/person_total` | `std_msgs/Int32` | personas **distintas** vistas (cada una cuenta una sola vez) |
-| `/yolo/person_alert` | `std_msgs/String` (JSON) | **alerta**: un mensaje por cada persona nueva (id, total, score, lat/lon, altura) |
+| `/yolo/person_alert` | `std_msgs/String` (JSON) | **alerta** por cada persona nueva: id, total, score, **`person_lat`/`person_lon`/`person_error_m`** y la posición del dron |
+| `/yolo/person_fix` | `std_msgs/String` (JSON) | mismo formato: sale cada vez que la **posición de una persona mejora** mientras se la sigue viendo (`t` = el de su alerta, `fix_t` = ahora) |
 | `/yolo/person_events` | `std_msgs/String` (JSON) | cada frame con personas: cuántas + lat/lon/altura/rumbo |
 | `/yolo/detections` | `vision_msgs/Detection2DArray` | cajas en píxeles, para otros nodos |
 | `/yolo/image_annotated/compressed` | `sensor_msgs/CompressedImage` | imagen con cajas y HUD (panel **Image**) |
 
 Servicios: `/drone/trail/reset` (`std_srvs/Trigger`) guarda el recorrido actual y empieza uno nuevo;
-`/yolo/person_total/reset` vuelve a 0 el total de personas distintas.
+`/yolo/person_total/reset` vuelve a 0 el total de personas distintas (los ids no se reutilizan).
 
 Conteo (`counting.*` en el YAML): una persona cuenta tras `min_hits` frames y se olvida si
 pasan `max_age_sec` **y** falta en `max_missed` frames con tiles seguidos (con tiling se
@@ -98,19 +105,31 @@ cd src/person_yolo && python3 -m pytest -q test
 
 ## 2. Preparar AirSim para probar lejos y cerca
 
-En el `settings.json` de Cosys-AirSim (Windows, `Documentos\AirSim\settings.json`) la cámara
-de la beta es **640x360**. Con eso el tiling **no aporta nada**: la imagen entera ya entra en un
-tile. El detector lo avisa en el log. Para probar personas lejanas, subí la resolución:
+Este proyecto usa su propia cámara y un lidar hacia abajo en el `settings.json` de
+Cosys-AirSim (Windows, `Documentos\AirSim\settings.json`), sin tocar `front_cam` (la usa
+UAV_ros2-beta). Dentro de `Vehicles.PX4`:
 
 ```json
-"front_cam": {
-  "CaptureSettings": [
-    { "ImageType": 0, "Width": 1920, "Height": 1080, "FOV_Degrees": 90 }
-  ]
+"Cameras": {
+  "yolo_cam": {
+    "CaptureSettings": [ { "ImageType": 0, "Width": 1920, "Height": 1080, "FOV_Degrees": 90 } ],
+    "X": 0.30, "Y": 0.0, "Z": -0.10, "Pitch": -30.0, "Roll": 0.0, "Yaw": 0.0
+  }
+},
+"Sensors": {
+  "down": { "SensorType": 5, "Enabled": true, "ExternalController": false,
+            "X": 0.0, "Y": 0.0, "Z": 0.3, "Pitch": -90.0, "MinDistance": 0.2, "MaxDistance": 40.0 }
 }
 ```
 
-(1280x720 también sirve y pesa menos.) Poné personas en el mapa de Unreal (MetaHumans,
+- **1920x1080**: con menos, el tiling no aporta nada (el detector lo avisa en el log).
+- **Pitch -30°**: con la cámara horizontal casi ninguna persona lejana se puede ubicar en el
+  suelo (el rayo llega demasiado rasante). Si lo cambiás, cambiá `geolocate.camera_pitch_deg`.
+- **`down` con `ExternalController: false`**: AirSim lo publica en
+  `/airsim_node/PX4/distance/down` y lo usa el detector; PX4 no lo recibe, así que no cambia
+  el vuelo de los otros proyectos. `launch_sitl.sh` remapea `yolo_cam` a `/camera`.
+
+Hay que reiniciar Unreal (Stop/Play) para que tome los cambios. Poné personas en el mapa de Unreal (MetaHumans,
 maniquíes, cualquier *character*) a distintas distancias del punto de despegue, por ejemplo
 5, 20, 50 y 100 m.
 
@@ -198,19 +217,61 @@ ros2 launch person_yolo demo.launch.py camera:=true    # webcam como /camera
 
 ---
 
-## 5. Ver todo en Foxglove
+## 5. Mapa de rescate en el navegador
+
+`http://localhost:8081` (en el dron real: `http://<ip-jetson>:8081`). Lo sirve `trail_node`,
+sin instalar nada y sin internet. Muestra:
+
+- **Mapa** con norte arriba y grilla en metros desde home (H): recorrido en azul, dron como
+  flecha violeta con su rumbo, personas **rojas** con su zona de búsqueda (2 sigma) y
+  **naranjas huecas** si son aproximadas (solo se sabe dónde estaba el dron).
+- **Lista** de personas, la más nueva arriba: coordenadas GPS con botón **Copiar**, error,
+  distancia desde home, distancia y rumbo desde el dron ahora, y link a Google Maps. Clic en una
+  persona = centrar el mapa en ella. Las nuevas parpadean unos segundos.
+- Botones: **Seguir dron**, **Ver todo**, zoom, y **Calles** (OpenStreetMap, necesita internet;
+  se recuerda en el navegador). **Descargar CSV** baja `personas.csv`.
+- Estado arriba: *En vivo*, *Sin GPS del dron* o *Sin conexión*.
+
+Las coordenadas son las del GPS: en SITL las simula Unreal (`OriginGeopoint` de AirSim), así que
+el mapa de calles no coincide con el escenario; en el dron real son las de la Pixhawk. La página
+no tiene contraseña: cualquiera en la misma red puede verla. `web_port: 0` la apaga.
+
+---
+
+## 6. Ver todo en Foxglove
 
 Conectarse a `ws://localhost:8765` (en el dron real: `ws://<ip-jetson>:8765`) y armar:
 
 | Panel | Tópico | Qué se ve |
 |---|---|---|
 | **Image** | `/yolo/image_annotated/compressed` | cajas **verdes** = cercanas (frame completo), **naranjas** = lejanas (tiles); HUD con conteo, GPS, altura, rumbo |
-| **Map** | `/drone/gps` + `/drone/trail_geojson` | línea **azul** = por dónde pasó, punto **verde** = home, **rojos** = dónde vio personas (clic = cuántas, score, hora), **amarillo** = dron ahora |
+| **Map** | `/drone/gps` + `/drone/trail_geojson` | línea **azul** = por dónde pasó, punto **verde** = home, **rojos** = personas ubicadas en el suelo, **naranjas** = sin ubicar; el dron en vivo es el punto de `/drone/gps` (conviene darle un color distinto al de las personas) |
 | **Plot** | `/yolo/person_count.data`, `/yolo/person_total.data` | personas en el frame y total de distintas |
+| **Raw Messages** | `/rescue/waypoints.data` | lista con las coordenadas de todas las personas |
 | **Raw Messages** | `/drone/status`, `/yolo/person_events` | estado del dron y último evento |
 
-Los tópicos del recorrido son *latched*: si abrís Foxglove a mitad del vuelo, el recorrido
-completo aparece enseguida.
+Cómo leer el mapa de rescate:
+
+- **Coordenadas:** al pasar el cursor por una persona se ven su lat/lon, el error, la
+  distancia desde home, el score y la hora. También quedan en `/rescue/waypoints` y en el log
+  de `trail_node`.
+- **Naranja = APROXIMADA:** es la posición del dron, no la de la persona. No sirve como
+  coordenada de rescate, por eso `/rescue/waypoints` deja `lat`/`lon` en `null`.
+- **Anillo rojo:** zona de búsqueda de radio 2 × `error_m` (`error_m` es 1 sigma).
+- **Grilla gris:** líneas cada `grid_step_m` (50 m; 0 = sin grilla) centradas en home; si
+  harían falta más de 41 por eje, se duplica el paso. Se dibuja encima de la capa base del
+  panel y solo va en el mensaje en vivo, no en `trail.geojson`.
+
+En SITL las coordenadas salen del `OriginGeopoint` de AirSim: el mapa base del panel no
+corresponde al escenario de Unreal, así que para orientarse conviene usar la grilla.
+
+Los tópicos del recorrido y `/rescue/waypoints` son *latched*: si abrís Foxglove a mitad del
+vuelo, todo aparece enseguida.
+
+En el dron real, `jetson.yaml` deja a `foxglove_bridge` en **solo lectura**
+(`capabilities: [connectionGraph]`): desde Foxglove no se puede publicar, llamar servicios ni
+cambiar parámetros, para que nadie en el WiFi pueda mandar comandos a `/fmu/in/*`. Los resets se
+hacen por `ros2 service call`.
 
 Para empezar un recorrido limpio sin reiniciar nada:
 ```bash
@@ -219,29 +280,68 @@ ros2 service call /drone/trail/reset std_srvs/srv/Trigger
 
 ---
 
-## 6. Después del vuelo: por dónde pasó
+## 7. Después del vuelo: por dónde pasó
 
 Cada vuelo queda en `~/yolo_flights/<fecha_hora>/`, reescrito cada 10 s (si se corta, no se
 pierde casi nada) y una última vez al cerrar:
 
 | Archivo | Abrir con |
 |---|---|
-| `trail.kml` | **Google Earth**: ruta en 3D + marcadores de personas |
+| `trail.kml` | **Google Earth**: ruta en 3D + un marcador por persona |
 | `trail.geojson` | geojson.io, QGIS, Foxglove |
 | `trail.csv` | planilla: `t, lat, lon, alt_msl, alt_rel, heading_deg` |
-| `detections.csv` | un renglón por lugar con personas: posición, máx. personas, score, frames |
+| `personas.csv` | **una fila por persona**: `id, t, lat, lon, ubicada, error_m, score, drone_lat, drone_lon` |
 
-Las detecciones de varios frames seguidos en el mismo lugar (a < `det_merge_m` y dentro de
-`det_merge_sec`) se fusionan en **un solo punto**; si no, sobrevolar a una persona daría
-decenas de puntos encimados.
+En el mapa, **rojo** = persona ubicada en el suelo (lat/lon de la persona, con su error);
+**naranja** = no se pudo ubicar y se marca la posición del dron (columna `ubicada` = 0).
 
-> El punto rojo marca **dónde estaba el dron** cuando vio personas, no dónde estaban las
-> personas. Ubicar a la persona en el suelo requiere la geometría de la cámara (ver
-> `Mision_1/patrol_perception/ground_projector.py`); para la demo alcanza con esto.
+### Ubicación de las personas
+
+`geolocate.py` traza el rayo de la cámara por el centro de la caja de la persona y lo corta
+con el suelo (método de `Mision_1/patrol_core/ground_projection.py`). Necesita:
+
+| Dato | De dónde sale |
+|---|---|
+| Posición del dron | `/drone/gps` |
+| Hacia dónde mira | `/drone/attitude` (PX4) + `geolocate.camera_pitch_deg` + `camera_hfov_deg` |
+| Altura sobre el suelo | **lidar**: SITL `down` de AirSim; real `/drone/agl` (EKF de PX4 con el lidar). Sin lidar en rango: altura sobre el despegue (supone suelo plano, más error) |
+
+Error típico con lidar: **2–6 m**, más cerca del dron y con la cámara más vertical. Las
+personas a más de `max_incidence_deg` (65°) de la vertical no se ubican: ahí el error crece
+sin control. Si no se pudo, la alerta dice por qué en `geo` (`sin GPS`, `sin actitud`,
+`sin altura`, `rayo muy rasante o sobre el horizonte`).
+
+**Cuándo aparece el waypoint** (`persons.py`): una persona tiene que seguirse
+`counting.min_seen_sec` (2 s) antes de ponerle waypoint y alerta. Así un falso positivo de un
+instante no llega al mapa, y mientras tanto se junta su mejor posición. Si a los 2 s todavía no
+se pudo ubicar, se espera hasta `counting.max_wait_sec` (6 s); si se la deja de ver antes, se
+marca igual, como aproximada. Después se la sigue ubicando en cada frame y `/yolo/person_fix`
+avisa cuando el error baja al menos un 20 %; el mapa, la web y `personas.csv` se actualizan.
+Las cajas cortadas por el borde de la imagen no se usan para ubicarla.
+
+**Duplicados:** si una persona sale de cuadro y vuelve, el tracker le da otro id interno, pero
+al ponerle waypoint se compara con las ya marcadas: si cae a menos de
+`counting.dedupe_radius_m` (4 m, o 2 sigma combinados si es mayor) de una que **no** se está
+viendo en ese momento, es la misma y no se crea otro waypoint (el log dice "vuelve a estar a la
+vista"). Dos personas vistas a la vez nunca se fusionan. Límites: dos personas distintas a menos
+de ese radio, vistas en momentos distintos, quedan como una; y una persona marcada como
+aproximada no se puede comparar por posición, así que puede duplicarse.
+
+`error_m` no baja de `geolocate.sigma_gps_min` (1 m), porque PX4 puede informar 0,1 m en SITL,
+y sigue siendo una estimación: no incluye un error de montaje de la cámara, el terreno en
+pendiente ni el desfase entre imagen y GPS.
+
+**Dron real:**
+- **Lidar** hacia abajo con alcance **mayor que la altura de vuelo** (un TFmini-S llega a
+  12 m: no sirve a 30 m; TF02-Pro ~40 m, LightWare SF11/C ~120 m), conectado a la Pixhawk.
+  En PX4: habilitar su driver y `EKF2_RNG_CTRL` para que el EKF publique `dist_bottom`.
+- **Medir** y poner en `jetson.yaml`: `geolocate.camera_hfov_deg` (FOV horizontal real de la
+  lente) y `geolocate.camera_pitch_deg` (ángulo real del soporte). Un error de 5° en el pitch
+  mueve la persona varios metros.
 
 ---
 
-## 7. Lejos y cerca: cómo funciona y cómo ajustarlo
+## 8. Lejos y cerca: cómo funciona y cómo ajustarlo
 
 Por cada frame:
 
@@ -284,7 +384,7 @@ peso en `models/` y poner `model: mi_peso.pt`.
 
 ---
 
-## 8. Dron real (Jetson)
+## 9. Dron real (Jetson)
 
 - **Jetson Orin NX + JetPack 6.2.1** → Ubuntu 22.04 → **ROS 2 Humble** (el código es el
   mismo, probado en un contenedor `ros:humble`; `launch_sitl.sh` no se usa).

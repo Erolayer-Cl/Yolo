@@ -102,7 +102,18 @@ def test_reset():
     c.reset()
     assert c.total == 0 and not c.tracks
     ids = c.update(np.array([_box(100, 100)]), 10.0)
-    assert ids[0] == 1
+    assert ids[0] == 2                   # el id 1 ya está en el mapa: no se reutiliza
+    assert c.total == 1
+
+
+def test_noisy_velocity_after_gap_keeps_id():
+    # Un salto de la caja deja una velocidad grande; tras un hueco la predicción
+    # queda lejos, pero la persona sigue donde estaba: no es alguien nuevo.
+    c = PersonCounter(min_hits=2, max_age_sec=1.5)
+    frames = ([[_box(100, 200)]] * 3 + [[_box(140, 200)]] + [[]] * 10
+              + [[_box(140, 200)]] * 3)
+    _run(c, frames)
+    assert c.total == 1
 
 
 def test_empty_input():

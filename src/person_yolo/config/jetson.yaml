@@ -41,6 +41,9 @@ person_detector:
       max_missed: 3              # en frames con tiles; inferencia lenta no recuenta a quien se sigue viendo
       iou_thr: 0.2
       dist_thr: 1.5              # a 8 Hz la persona se corre más entre frames
+      min_seen_sec: 2.0          # waypoint tras seguirla esto (persons.py)
+      max_wait_sec: 6.0
+      dedupe_radius_m: 4.0
 
     annotated_scale: 0.5         # 960x540 por WiFi
     jpeg_quality: 60
@@ -48,6 +51,22 @@ person_detector:
     events_csv: ~/yolo_flights/events.csv
     log_period_sec: 5.0
     stale_sec: 2.0               # si se corta la Pixhawk, alertas "sin GPS" (no la posición vieja)
+
+    # Ubicación de cada persona en el suelo (geolocate.py). Altura: lidar hacia
+    # abajo conectado a la Pixhawk (EKF2_RNG_CTRL), llega por gps_node en /drone/agl.
+    geolocate:
+      enabled: true
+      camera_hfov_deg: 90.0      # MEDIR: FOV horizontal real de la cámara/lente
+      camera_pitch_deg: -30.0    # MEDIR: ángulo real del soporte (- = hacia abajo)
+      person_height_m: 0.9
+      max_incidence_deg: 65.0
+      agl_topic: /drone/agl
+      agl_is_slant: false        # dist_bottom de PX4 ya es vertical
+      sigma_pix: 2.0
+      sigma_att_deg: 1.0
+      sigma_alt_lidar: 0.3
+      sigma_alt_home: 3.0
+      sigma_gps_min: 1.0         # piso del error del GPS
 
 fpv_node:
   ros__parameters:
@@ -76,16 +95,19 @@ trail_node:
   ros__parameters:
     min_step_m: 1.0
     max_points: 5000
-    det_merge_m: 5.0
-    det_merge_sec: 10.0
     publish_rate_hz: 1.0
     output_dir: ~/yolo_flights
     save_period_sec: 10.0
+    grid_step_m: 50.0            # grilla del mapa centrada en home; 0 = sin grilla
+    web_port: 8081               # desde tierra: http://<ip-jetson>:8081 (sin contraseña)
 
 foxglove_bridge:
   ros__parameters:
     port: 8765
     address: 0.0.0.0
+    # Solo lectura: con los permisos por defecto, cualquiera conectado al WiFi
+    # podría publicar en /fmu/in/* (comandos a PX4) o cambiar parámetros.
+    capabilities: [connectionGraph]
     # Por WiFi NO mandar la imagen cruda (/camera): satura el enlace.
     topic_whitelist:
       - '/yolo/image_annotated/compressed'
@@ -94,3 +116,4 @@ foxglove_bridge:
       - '/yolo/person_alert'
       - '/yolo/person_events'
       - '/drone/.*'
+      - '/rescue/.*'

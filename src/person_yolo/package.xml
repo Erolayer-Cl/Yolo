@@ -9,7 +9,6 @@
     con los lugares donde se vieron personas.
 
     ultralytics y torch NO se instalan por rosdep: ver README.md.
-    foxglove_msgs es opcional (linea del recorrido en el panel Map).
   </description>
   <maintainer email="ibanezignacio2005@gmail.com">matias</maintainer>
   <license>Apache-2.0</license>
@@ -26,6 +25,10 @@
   <depend>cv_bridge</depend>
   <depend>px4_msgs</depend>
   <exec_depend>foxglove_bridge</exec_depend>
+  <exec_depend>foxglove_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
 

@@ -10,8 +10,13 @@ ignora las señales siguientes; el bucle usa spin_once con timeout para volver
 siempre a Python a mirarla (un spin() bloqueante sin mensajes entrantes no
 vuelve nunca) y no se lanza ninguna excepción en medio de un callback, p.ej.
 a mitad de una inferencia de torch.
+
+Un error en un callback (p.ej. la GPU sin memoria porque Unreal la está usando)
+se registra y el nodo sigue: perder un frame es mejor que dejar de detectar
+durante el resto del vuelo.
 """
 import signal
+import traceback
 
 import rclpy
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
@@ -37,13 +42,22 @@ def run(node_cls, args=None, on_exit=None):
         executor = SingleThreadedExecutor()
         executor.add_node(node)
         while not _stop and rclpy.ok():
-            executor.spin_once(timeout_sec=0.2)
+            try:
+                executor.spin_once(timeout_sec=0.2)
+            except ExternalShutdownException:
+                raise
+            except Exception:
+                node.get_logger().error(
+                    f'Error en un callback, el nodo sigue:\n{traceback.format_exc()}',
+                    throttle_duration_sec=5.0)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         _on_signal(None, None)
         if node is not None:
-            if on_exit is not None:
-                on_exit(node)
-            node.destroy_node()
+            try:
+                if on_exit is not None:
+                    on_exit(node)
+            finally:
+                node.destroy_node()
         rclpy.try_shutdown()

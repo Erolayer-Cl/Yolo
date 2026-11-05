@@ -38,6 +38,11 @@ person_detector:
       max_missed: 3              # ...y en 3 frames CON tiles seguidos -> si vuelve, cuenta de nuevo
       iou_thr: 0.2
       dist_thr: 1.0              # salto máx. del centro, en diagonales de la caja
+      # Waypoint (persons.py): se pone tras seguir a la persona min_seen_sec, con
+      # su mejor posición; si no se ubica, se espera hasta max_wait_sec.
+      min_seen_sec: 2.0
+      max_wait_sec: 6.0
+      dedupe_radius_m: 4.0       # misma persona que vuelve a entrar al cuadro; 0 = apagado
 
     annotated_scale: 1.0
     jpeg_quality: 75
@@ -45,6 +50,20 @@ person_detector:
     events_csv: ''               # ej. ~/yolo_flights/events.csv
     log_period_sec: 5.0
     stale_sec: 2.0               # GPS/pose más viejos que esto = alerta "sin GPS"
+
+    # Ubicación de cada persona en el suelo (geolocate.py). Cámara = yolo_cam de
+    # settings.json (FOV 90, inclinada -30°); altura = sensor `down` de AirSim.
+    geolocate:
+      enabled: true
+      camera_hfov_deg: 90.0      # = FOV_Degrees de yolo_cam
+      camera_pitch_deg: -30.0    # = Pitch de yolo_cam
+      person_height_m: 0.9       # se apunta al centro de la persona
+      max_incidence_deg: 65.0    # más rasante = no se ubica (error sin control)
+      agl_topic: /airsim_node/PX4/distance/down
+      agl_is_slant: true         # sensor fijo al cuerpo: se corrige por la inclinación
+      sigma_alt_lidar: 0.3
+      sigma_alt_home: 3.0        # sin lidar (fuera de rango): altura sobre el despegue
+      sigma_gps_min: 1.0         # piso del error del GPS: en SITL PX4 informa 0.1 m
 
 fpv_node:
   ros__parameters:
@@ -71,11 +90,11 @@ trail_node:
   ros__parameters:
     min_step_m: 1.0              # un punto nuevo cada 1 m recorrido
     max_points: 5000             # al pasarse, se ralea (se sigue viendo todo)
-    det_merge_m: 5.0             # detecciones a <5 m y <10 s = un solo punto rojo
-    det_merge_sec: 10.0
     publish_rate_hz: 1.0
-    output_dir: ~/yolo_flights   # trail.kml / .geojson / .csv por vuelo
+    output_dir: ~/yolo_flights   # trail.kml / .geojson / .csv + personas.csv por vuelo
     save_period_sec: 10.0
+    grid_step_m: 50.0            # grilla del mapa centrada en home; 0 = sin grilla
+    web_port: 8081               # mapa de rescate en http://localhost:8081; 0 = apagado
 
 foxglove_bridge:
   ros__parameters:

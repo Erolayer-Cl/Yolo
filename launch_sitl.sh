@@ -79,7 +79,7 @@ tmux send-keys -t "$PANE_AGENT" "MicroXRCEAgent udp4 -p 8888" C-m
 # airsim_node.launch.py de upstream. Ver UAV_ros2-beta/launch_sim_unreal.sh.
 AIRSIM_PARAMS="-p host_ip:=localhost -p host_port:=41451 -p is_vulkan:=true -p publish_clock:=false -p enable_api_control:=false -p enable_object_transforms_list:=true -p update_airsim_control_every_n_sec:=0.01 -p update_airsim_img_response_every_n_sec:=0.033 -p update_lidar_every_n_sec:=0.01 -p update_gpulidar_every_n_sec:=0.01 -p update_echo_every_n_sec:=0.01"
 # Si cambiás el nombre de la cámara o el ImageType en settings.json, cambiá esto.
-AIRSIM_REMAPS="-r /airsim_node/PX4/front_cam_Scene/image:=/camera -r /airsim_node/PX4/front_cam_Scene/camera_info:=/camera_info"
+AIRSIM_REMAPS="-r /airsim_node/PX4/yolo_cam_Scene/image:=/camera -r /airsim_node/PX4/yolo_cam_Scene/camera_info:=/camera_info"
 
 PANE_AIRSIM=$(tmux split-window -v -t "$PANE_PX4" -P -F '#{pane_id}')
 tmux send-keys -t "$PANE_AIRSIM" "cd $AIRSIM_ROS_DIR && source install/setup.bash && sleep 5 && ros2 run airsim_ros_pkgs airsim_node --ros-args $AIRSIM_PARAMS $AIRSIM_REMAPS" C-m
@@ -98,6 +98,7 @@ tmux send-keys -t "$PANE_ECHO" "cd $WS_DIR && source $ROS_SETUP && source instal
 echo ""
 echo "👉 Foxglove: ws://localhost:8765   |   QGroundControl + radio USB para volar"
 echo "   FPV: http://localhost:8080 (Y = cajas YOLO on/off)  |  o tecla F en Unreal"
+echo "   Mapa de rescate: http://localhost:8081 (personas con sus coordenadas GPS)"
 echo "   Ventana 'demo' (Ctrl-b n): logs del detector y estado del dron."
 echo "   Para parar: ./stop_sitl.sh (guarda el recorrido en ~/yolo_flights/)"
 

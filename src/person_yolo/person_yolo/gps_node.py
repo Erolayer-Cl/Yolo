@@ -4,6 +4,11 @@
   /drone/gps     sensor_msgs/NavSatFix   <- panel Map de Foxglove
   /drone/pose    geometry_msgs/PoseStamped (frame `odom`, ENU, z = altura sobre home)
   /drone/status  std_msgs/String (JSON: armado, modo, satélites, fix, altura)
+  /drone/attitude geometry_msgs/QuaternionStamped: actitud completa tal cual
+                 PX4 (frame `ned`: cuerpo FRD -> NED, w,x,y,z). La usa
+                 person_detector para ubicar personas en el suelo (geolocate.py).
+  /drone/agl     sensor_msgs/Range: altura sobre el terreno del EKF de PX4, solo
+                 si la mide un lidar (dist_bottom con sensor de rango). Vertical.
 
 Funciona igual en SITL y en el dron real: en ambos casos PX4 publica
 /fmu/out/* a través del MicroXRCEAgent. Desde PX4 1.16 los mensajes
@@ -17,13 +22,13 @@ import json
 import math
 import re
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, QuaternionStamped
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import NavSatFix, NavSatStatus
+from sensor_msgs.msg import NavSatFix, NavSatStatus, Range
 from std_msgs.msg import String
 
-from px4_msgs.msg import SensorGps, VehicleLocalPosition, VehicleStatus
+from px4_msgs.msg import SensorGps, VehicleAttitude, VehicleLocalPosition, VehicleStatus
 
 from person_yolo.node_main import run
 
@@ -52,6 +57,7 @@ class GpsNode(Node):
         self.declare_parameter('local_position_topic',
                                '/fmu/out/vehicle_local_position_v1')
         self.declare_parameter('status_topic', '/fmu/out/vehicle_status_v1')
+        self.declare_parameter('attitude_topic', '/fmu/out/vehicle_attitude')
         self.declare_parameter('pose_rate_hz', 20.0)    # local_position llega a ~100 Hz
         self.declare_parameter('status_rate_hz', 1.0)
         self.declare_parameter('odom_frame', 'odom')
@@ -71,6 +77,8 @@ class GpsNode(Node):
         self.pub_gps = self.create_publisher(NavSatFix, '/drone/gps', 10)
         self.pub_pose = self.create_publisher(PoseStamped, '/drone/pose', 10)
         self.pub_status = self.create_publisher(String, '/drone/status', 10)
+        self.pub_att = self.create_publisher(QuaternionStamped, '/drone/attitude', 10)
+        self.pub_agl = self.create_publisher(Range, '/drone/agl', 10)
 
         self.create_subscription(SensorGps, self.get_parameter('gps_topic').value,
                                  self._on_gps, px4_qos)
@@ -79,6 +87,8 @@ class GpsNode(Node):
                                  self._on_local, px4_qos)
         self.create_subscription(VehicleStatus, self.get_parameter('status_topic').value,
                                  self._on_status, px4_qos)
+        self.create_subscription(VehicleAttitude, self.get_parameter('attitude_topic').value,
+                                 self._on_attitude, px4_qos)
 
         srate = float(self.get_parameter('status_rate_hz').value)
         if srate > 0:
@@ -87,7 +97,9 @@ class GpsNode(Node):
         self._gps = None
         self._local = None
         self._vstatus = None
+        self._att = None
         self._last_pose_ns = 0
+        self._last_att_ns = 0
         self._warned = set()
         self.create_timer(5.0, self._check_alive)
 
@@ -100,9 +112,10 @@ class GpsNode(Node):
         out.header.stamp = self.get_clock().now().to_msg()
         out.header.frame_id = self.base_frame
         out.status.service = NavSatStatus.SERVICE_GPS
-        if msg.fix_type >= SensorGps.FIX_TYPE_RTK_FLOAT:
+        # 8 = extrapolado (ver FIX_NAMES): no es una medición, cuenta como sin fix.
+        if msg.fix_type in (5, 6):
             out.status.status = NavSatStatus.STATUS_GBAS_FIX
-        elif msg.fix_type >= SensorGps.FIX_TYPE_2D:
+        elif msg.fix_type in (2, 3, 4):
             out.status.status = NavSatStatus.STATUS_FIX
         else:
             out.status.status = NavSatStatus.STATUS_NO_FIX
@@ -119,12 +132,13 @@ class GpsNode(Node):
 
     def _on_local(self, msg: VehicleLocalPosition):
         self._local = msg
-        if not (msg.xy_valid and msg.z_valid):
-            return
         now = self.get_clock().now()
         if now.nanoseconds - self._last_pose_ns < self.pose_min_period_ns:
             return
         self._last_pose_ns = now.nanoseconds
+        self._publish_agl(msg, now)
+        if not (msg.xy_valid and msg.z_valid):
+            return
 
         out = PoseStamped()
         out.header.stamp = now.to_msg()
@@ -138,6 +152,34 @@ class GpsNode(Node):
         o = out.pose.orientation
         o.x, o.y, o.z, o.w = q
         self.pub_pose.publish(out)
+
+    def _publish_agl(self, msg: VehicleLocalPosition, now):
+        # Solo si el EKF la estima CON un lidar: sin sensor de rango,
+        # dist_bottom es un supuesto de terreno plano, no una medición.
+        if not (msg.dist_bottom_valid and math.isfinite(msg.dist_bottom)
+                and msg.dist_bottom_sensor_bitfield & VehicleLocalPosition.DIST_BOTTOM_SENSOR_RANGE):
+            return
+        out = Range()
+        out.header.stamp = now.to_msg()
+        out.header.frame_id = self.base_frame
+        out.radiation_type = Range.INFRARED
+        out.min_range = 0.0
+        out.max_range = float('inf')
+        out.range = float(msg.dist_bottom)
+        self.pub_agl.publish(out)
+
+    def _on_attitude(self, msg: VehicleAttitude):
+        self._att = msg
+        now = self.get_clock().now()
+        if now.nanoseconds - self._last_att_ns < self.pose_min_period_ns:
+            return
+        self._last_att_ns = now.nanoseconds
+        out = QuaternionStamped()
+        out.header.stamp = now.to_msg()
+        out.header.frame_id = 'ned'
+        q = out.quaternion
+        q.w, q.x, q.y, q.z = (float(v) for v in msg.q)     # PX4: [w, x, y, z]
+        self.pub_att.publish(out)
 
     def _on_status(self, msg: VehicleStatus):
         self._vstatus = msg
@@ -171,7 +213,7 @@ class GpsNode(Node):
         probable: otra versión del mensaje (_vN) o px4_msgs distinto al firmware."""
         topics = None
         for key, got in (('gps_topic', self._gps), ('local_position_topic', self._local),
-                         ('status_topic', self._vstatus)):
+                         ('status_topic', self._vstatus), ('attitude_topic', self._att)):
             if got is not None or key in self._warned:
                 continue
             self._warned.add(key)
