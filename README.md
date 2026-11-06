@@ -222,14 +222,18 @@ ros2 launch person_yolo demo.launch.py camera:=true    # webcam como /camera
 `http://localhost:8081` (en el dron real: `http://<ip-jetson>:8081`). Lo sirve `trail_node`,
 sin instalar nada y sin internet. Muestra:
 
-- **Mapa** con norte arriba y grilla en metros desde home (H): recorrido en azul, dron como
+- **Conteo** arriba: personas vistas (waypoints), cuántas tienen coordenadas, cuántas son
+  aproximadas y cuántas hay en cámara ahora (`/yolo/person_count`; "–" si el detector no publica).
+- **Mapa GPS** con norte arriba y grilla en metros desde home (H): recorrido en azul, dron como
   flecha violeta con su rumbo, personas **rojas** con su zona de búsqueda (2 sigma) y
-  **naranjas huecas** si son aproximadas (solo se sabe dónde estaba el dron).
-- **Lista** de personas, la más nueva arriba: coordenadas GPS con botón **Copiar**, error,
-  distancia desde home, distancia y rumbo desde el dron ahora, y link a Google Maps. Clic en una
-  persona = centrar el mapa en ella. Las nuevas parpadean unos segundos.
-- Botones: **Seguir dron**, **Ver todo**, zoom, y **Calles** (OpenStreetMap, necesita internet;
-  se recuerda en el navegador). **Descargar CSV** baja `personas.csv`.
+  **naranjas huecas** si son aproximadas (solo se sabe dónde estaba el dron). Con el mouse
+  encima, abajo a la izquierda se ve la lat/lon de ese punto (en pantalla táctil, al tocar).
+- **Tabla de coordenadas**: número, estado, latitud, longitud, error, distancia y rumbo desde el
+  dron ahora, y hora. **Copiar** copia "lat, lon" de una persona; **Copiar tabla** copia todo
+  para pegarlo en una planilla o un mensaje; **CSV** baja `personas.csv`. Clic en una fila =
+  centrar el mapa en esa persona. Las nuevas parpadean unos segundos.
+- Botones del mapa: **Seguir dron**, **Ver todo**, zoom, y **Calles** (OpenStreetMap, necesita
+  internet; se recuerda en el navegador).
 - Estado arriba: *En vivo*, *Sin GPS del dron* o *Sin conexión*.
 
 Las coordenadas son las del GPS: en SITL las simula Unreal (`OriginGeopoint` de AirSim), así que

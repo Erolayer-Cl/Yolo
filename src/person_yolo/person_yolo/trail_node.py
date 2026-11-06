@@ -31,7 +31,7 @@ from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import NavSatFix, NavSatStatus
-from std_msgs.msg import String
+from std_msgs.msg import Int32, String
 from std_srvs.srv import Trigger
 
 from person_yolo.node_main import run
@@ -82,6 +82,7 @@ class TrailNode(Node):
         self.grid_step_m = float(self.get_parameter('grid_step_m').value)
         self.output_root = os.path.expanduser(self.get_parameter('output_dir').value)
         self._fix = None                     # último GPS válido, para la web
+        self._in_view = None                 # (personas en cámara, instante), para la web
         self._new_trail()
 
         # Latched (TRANSIENT_LOCAL): si abrís Foxglove a mitad del vuelo, el
@@ -102,6 +103,7 @@ class TrailNode(Node):
         self.create_subscription(PoseStamped, '/drone/pose', self._on_pose, 10)
         self.create_subscription(String, '/yolo/person_alert', self._on_alert, 50)
         self.create_subscription(String, '/yolo/person_fix', self._on_alert, 50)
+        self.create_subscription(Int32, '/yolo/person_count', self._on_count, 10)
         self.create_service(Trigger, '/drone/trail/reset', self._on_reset)
 
         rate = float(self.get_parameter('publish_rate_hz').value)
@@ -150,6 +152,9 @@ class TrailNode(Node):
                                   msg.altitude, alt_rel, heading))
         self._fix = (msg.latitude, msg.longitude, alt_rel, heading, time.monotonic())
 
+    def _on_count(self, msg: Int32):
+        self._in_view = (int(msg.data), time.monotonic())
+
     def _on_alert(self, msg: String):
         try:
             al = json.loads(msg.data)
@@ -191,7 +196,11 @@ class TrailNode(Node):
 
     def _web_live(self):
         live = {'lat': None, 'lon': None, 'alt_rel': None, 'heading_deg': None,
-                'age_s': None, 'ne': None}
+                'age_s': None, 'ne': None, 'in_view': None}
+        # El detector publica el conteo en cada inferencia: si hace 2 s que no
+        # llega, el número ya no dice nada (cámara o detector caídos).
+        if self._in_view is not None and time.monotonic() - self._in_view[1] < 2.0:
+            live['in_view'] = self._in_view[0]
         if self._fix is not None:
             lat, lon, alt_rel, heading, t = self._fix
             live.update(lat=round(lat, 8), lon=round(lon, 8), alt_rel=_num(alt_rel, 2),
