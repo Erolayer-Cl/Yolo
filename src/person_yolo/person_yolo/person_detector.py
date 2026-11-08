@@ -63,24 +63,12 @@ from vision_msgs.msg import (
 import cv2
 
 from person_yolo.geolocate import Camera, cos_tilt, locate, touches_edge
+from person_yolo.inference import InferenceParams, detect_persons, results_to_boxes
 from person_yolo.model_path import is_downloadable, resolve_model_path
 from person_yolo.node_main import run
 from person_yolo.overlay import draw_boxes, draw_text_panel, enu_quat_to_heading_deg
 from person_yolo.persons import Observation, PersonRegistry
-from person_yolo.tiling import make_tiles, merge
 from person_yolo.tracker import PersonCounter
-
-
-def _boxes_np(results):
-    """Results de ultralytics -> ndarray (N, 6) x1,y1,x2,y2,score,cls."""
-    b = results.boxes
-    if b is None or len(b) == 0:
-        return np.zeros((0, 6))
-    return np.concatenate([
-        b.xyxy.cpu().numpy(),
-        b.conf.cpu().numpy().reshape(-1, 1),
-        b.cls.cpu().numpy().reshape(-1, 1),
-    ], axis=1).astype(np.float64)
 
 
 class PersonDetector(Node):
@@ -161,6 +149,12 @@ class PersonDetector(Node):
         self.tile_batch = int(gp('tiling.batch_size').value)
         self.merge_thr = float(gp('tiling.merge_thr').value)
         self.merge_metric = gp('tiling.merge_metric').value
+        # Lo que necesita la inferencia, en un solo objeto (ver inference.py).
+        self.infer_params = InferenceParams(
+            imgsz=self.imgsz, conf=self.conf, tiling=self.tiling,
+            tile_size=self.tile_size, tile_overlap=self.tile_overlap,
+            tile_conf=self.tile_conf, tile_batch=self.tile_batch,
+            merge_thr=self.merge_thr, merge_metric=self.merge_metric)
         self.annotated_scale = float(gp('annotated_scale').value)
         self.jpeg_quality = int(gp('jpeg_quality').value)
         self.draw_tiles = bool(gp('draw_tiles').value)
@@ -453,44 +447,31 @@ class PersonDetector(Node):
 
     # --------------------------------------------------------------- inferencia
     def _predict(self, images, imgsz, conf):
-        return self.model.predict(images, imgsz=imgsz, conf=conf, iou=self.iou,
-                                  classes=self.classes, device=self.device,
-                                  verbose=False, **self.quant_kwargs)
+        """predict_fn de inference.py: lista de imágenes -> lista de cajas (N, 6)."""
+        results = self.model.predict(images, imgsz=imgsz, conf=conf, iou=self.iou,
+                                     classes=self.classes, device=self.device,
+                                     verbose=False, **self.quant_kwargs)
+        return [results_to_boxes(r) for r in results]
 
     def _infer(self, frame):
-        h, w = frame.shape[:2]
-        t0 = time.monotonic()
-        full = _boxes_np(self._predict(frame, self.imgsz, self.conf)[0])
-        t1 = time.monotonic()
-        self._t_full += t1 - t0
+        """La detección vive en inference.py; acá queda lo propio del nodo:
+        cada cuántos frames hay tiles, el aviso al logger y las estadísticas."""
+        use_tiles = self._frame_idx % self.tile_every == 0
+        r = detect_persons(frame, self._predict, self.infer_params, use_tiles)
 
-        tiles = []
-        tile_results = []
-        if self.tiling and self._frame_idx % self.tile_every == 0:
-            tiles = make_tiles(w, h, self.tile_size, self.tile_overlap)
-            if len(tiles) <= 1:
-                if not self._warned_tiles:
-                    self._warned_tiles = True
-                    self.get_logger().warn(
-                        f'Imagen {w}x{h} <= tile {self.tile_size}: el tiling no aporta '
-                        'nada. Subí la resolución de la cámara (en AirSim: settings.json '
-                        'Width/Height) o bajá tiling.tile_size.')
-                tiles = []
-            else:
-                crops = [frame[y0:y1, x0:x1] for x0, y0, x1, y1 in tiles]
-                bs = self.tile_batch if self.tile_batch > 0 else len(crops)
-                for i in range(0, len(crops), bs):
-                    res = self._predict(crops[i:i + bs], self.tile_size, self.tile_conf)
-                    for rect, r in zip(tiles[i:i + bs], res):
-                        tile_results.append((rect, _boxes_np(r)))
-                self._t_tiles += time.monotonic() - t1
-                self._frames_tiled += 1
-
-        boxes, src = merge(full, tile_results, w, h, self.merge_thr, self.merge_metric)
-        # Las de tile pasaron con tiling.conf (más bajo); las del frame completo ya
-        # vienen filtradas por conf. Se conserva todo lo que sobrevivió al NMS.
-        self._last_ms = 1000.0 * (time.monotonic() - t0)
-        return boxes, src, tiles
+        if r.too_small and not self._warned_tiles:
+            self._warned_tiles = True
+            h, w = frame.shape[:2]
+            self.get_logger().warn(
+                f'Imagen {w}x{h} <= tile {self.tile_size}: el tiling no aporta '
+                'nada. Subí la resolución de la cámara (en AirSim: settings.json '
+                'Width/Height) o bajá tiling.tile_size.')
+        self._t_full += r.full_s
+        if r.tiles:
+            self._t_tiles += r.tiles_s
+            self._frames_tiled += 1
+        self._last_ms = 1000.0 * r.total_s
+        return r.boxes, r.src, r.tiles
 
     # --------------------------------------------------------------- callback
     def image_callback(self, msg: Image):
