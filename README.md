@@ -31,7 +31,9 @@ YOLO/
     ├── config/jetson.yaml          parámetros para el dron real
     ├── launch/demo.launch.py
     └── person_yolo/
-        ├── person_detector.py      YOLO full + tiles, conteo, alertas con GPS
+        ├── person_detector.py      nodo ROS: conteo, alertas con GPS, imagen anotada
+        ├── inference.py            detección full + tiles sin ROS (la usa el nodo y
+        │                           cualquier evaluación del detector), con tests
         ├── gps_node.py             PX4 -> /drone/gps, pose, status, attitude, agl
         ├── trail_node.py           recorrido + puntos de personas (mapa, archivos)
         ├── fpv_node.py             video FPV + HUD en http://<host>:8080 (cajas on/off)
