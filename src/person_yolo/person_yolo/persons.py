@@ -14,6 +14,12 @@ es un waypoint:
      en vez de crear otro waypoint. Dos personas vistas a la vez nunca se
      fusionan. Límite: dos personas distintas a menos de ese radio, vistas en
      momentos distintos, quedan como una.
+     Aproximadas (sin posición propia): se comparan por la posición del DRON. Una
+     aproximada nueva es la misma que una aproximada ya marcada, no vista ahora,
+     si el dron está a menos de `approx_radius_m` de donde estaba al marcarla
+     (típico: el dron quieto y la persona lejana que parpadea). Límite: personas
+     distintas que aparecen de a una con el dron en el mismo lugar quedan como
+     una; no tienen coordenadas de rescate igual.
   3. Mejoras: cada vez que el error de una persona baja por debajo de
      `min_ratio` veces el mejor, evento 'fix'.
 
@@ -38,6 +44,8 @@ class Observation:
     lon: float = None
     error_m: float = INF
     payload: dict = None        # datos del detector, se devuelven en el evento
+    drone_lat: float = None     # posición del dron en este frame (None = sin GPS)
+    drone_lon: float = None
 
     @property
     def located(self) -> bool:
@@ -68,6 +76,8 @@ class _Person:
     lon: float
     error_m: float
     last: float
+    drone_lat: float = None     # dónde estaba el dron al marcarla
+    drone_lon: float = None
 
 
 @dataclass
@@ -76,6 +86,7 @@ class PersonRegistry:
     max_wait_sec: float = 6.0
     forget_sec: float = 2.0         # track pendiente sin verse más que esto = perdido
     dedupe_radius_m: float = 4.0    # 0 = no buscar duplicados
+    approx_radius_m: float = 10.0   # aproximadas: distancia del DRON; 0 = no buscar
     min_ratio: float = 0.8
     persons: dict = field(default_factory=dict)         # id -> _Person
     pending: dict = field(default_factory=dict)         # track_id -> _Pending
@@ -138,7 +149,8 @@ class PersonRegistry:
         return Event('fix', p.id, p.t, o)
 
     def _announce(self, tid, o: Observation, now, stamp_t, seen_now) -> list:
-        dup = self._nearest_unseen(o, seen_now) if o.located else None
+        dup = (self._nearest_unseen(o, seen_now) if o.located
+               else self._nearest_unseen_approx(o, seen_now))
         if dup is not None:
             self.track_person[tid] = dup.id
             dup.last = now
@@ -148,7 +160,7 @@ class PersonRegistry:
                 out.append(self._fix(dup, o))
             return out
         p = _Person(self._next_id, stamp_t, o.lat, o.lon,
-                    o.error_m if o.located else INF, now)
+                    o.error_m if o.located else INF, now, o.drone_lat, o.drone_lon)
         self._next_id += 1
         self.total += 1
         self.persons[p.id] = p
@@ -166,5 +178,20 @@ class PersonRegistry:
             d = haversine_m(o.lat, o.lon, p.lat, p.lon)
             limit = max(self.dedupe_radius_m, 2.0 * math.hypot(o.error_m, p.error_m))
             if d <= limit and d < best_d:
+                best, best_d = p, d
+        return best
+
+    def _nearest_unseen_approx(self, o: Observation, seen_now):
+        """Aproximada ya marcada, no vista ahora, marcada con el dron cerca de
+        donde está ahora. Solo contra aproximadas: una ubicada tiene su propia
+        posición, que puede estar lejos del dron."""
+        if self.approx_radius_m <= 0 or o.drone_lat is None:
+            return None
+        best, best_d = None, INF
+        for p in self.persons.values():
+            if p.id in seen_now or p.lat is not None or p.drone_lat is None:
+                continue
+            d = haversine_m(o.drone_lat, o.drone_lon, p.drone_lat, p.drone_lon)
+            if d <= self.approx_radius_m and d < best_d:
                 best, best_d = p, d
         return best

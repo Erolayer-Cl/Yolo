@@ -330,8 +330,13 @@ al ponerle waypoint se compara con las ya marcadas: si cae a menos de
 `counting.dedupe_radius_m` (4 m, o 2 sigma combinados si es mayor) de una que **no** se está
 viendo en ese momento, es la misma y no se crea otro waypoint (el log dice "vuelve a estar a la
 vista"). Dos personas vistas a la vez nunca se fusionan. Límites: dos personas distintas a menos
-de ese radio, vistas en momentos distintos, quedan como una; y una persona marcada como
-aproximada no se puede comparar por posición, así que puede duplicarse.
+de ese radio, vistas en momentos distintos, quedan como una.
+
+Las **aproximadas** no tienen posición propia: se comparan por la del **dron**. Una aproximada
+nueva es la misma que otra aproximada no vista en ese momento si el dron está a menos de
+`counting.dedupe_approx_radius_m` (10 m) de donde estaba al marcarla. Es el caso típico del dron
+quieto con personas lejanas que aparecen y desaparecen. Límite: personas distintas que aparecen de a
+una con el dron en el mismo lugar quedan como una (igual no tienen coordenadas de rescate).
 
 `error_m` no baja de `geolocate.sigma_gps_min` (1 m), porque PX4 puede informar 0,1 m en SITL,
 y sigue siendo una estimación: no incluye un error de montaje de la cámara, el terreno en

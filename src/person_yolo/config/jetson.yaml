@@ -44,6 +44,7 @@ person_detector:
       min_seen_sec: 2.0          # waypoint tras seguirla esto (persons.py)
       max_wait_sec: 6.0
       dedupe_radius_m: 4.0
+      dedupe_approx_radius_m: 10.0   # aproximadas: por la posición del dron; 0 = apagado
 
     annotated_scale: 0.5         # 960x540 por WiFi
     jpeg_quality: 60

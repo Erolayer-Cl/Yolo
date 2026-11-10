@@ -112,6 +112,8 @@ class PersonDetector(Node):
         self.declare_parameter('counting.min_seen_sec', 2.0)    # seguirla esto antes del waypoint
         self.declare_parameter('counting.max_wait_sec', 6.0)    # ...y hasta esto si no se ubica
         self.declare_parameter('counting.dedupe_radius_m', 4.0)  # 0 = sin buscar duplicados
+        # Aproximadas: misma persona si el dron está a menos de esto de donde la marcó
+        self.declare_parameter('counting.dedupe_approx_radius_m', 10.0)  # 0 = apagado
 
         self.declare_parameter('annotated_scale', 1.0)
         self.declare_parameter('jpeg_quality', 75)
@@ -175,7 +177,8 @@ class PersonDetector(Node):
             min_seen_sec=float(gp('counting.min_seen_sec').value),
             max_wait_sec=float(gp('counting.max_wait_sec').value),
             forget_sec=float(gp('counting.max_age_sec').value),
-            dedupe_radius_m=float(gp('counting.dedupe_radius_m').value))
+            dedupe_radius_m=float(gp('counting.dedupe_radius_m').value),
+            approx_radius_m=float(gp('counting.dedupe_approx_radius_m').value))
         # Una persona lejana solo aparece en los frames con tiles: max_missed
         # cuenta frames CON tiles, si no se la olvidaría entre uno y otro.
         max_missed = max(1, int(gp('counting.max_missed').value))
@@ -588,11 +591,12 @@ class PersonDetector(Node):
             else:
                 geo, why = self._locate_person(box, width, height)
             payload = {'box': box, 'geo': geo, 'why': why, 'where': where}
+            drone = {'drone_lat': where['lat'], 'drone_lon': where['lon']}
             if geo:
                 out.append(Observation(int(tid), geo['lat'], geo['lon'], geo['error_m'],
-                                       payload))
+                                       payload, **drone))
             else:
-                out.append(Observation(int(tid), payload=payload))
+                out.append(Observation(int(tid), payload=payload, **drone))
         return out
 
     def _publish_person_events(self, events, stamp_t):

@@ -115,6 +115,52 @@ def test_unlocated_person_gets_fix_later():
     assert kinds(ev) == ['alert', 'fix']
 
 
+def approx(tid, drone_north_m):
+    """Persona sin ubicar, con el dron `drone_north_m` al norte de LAT0."""
+    return Observation(tid, drone_lat=LAT0 + drone_north_m / M_PER_DEG, drone_lon=LON0)
+
+
+def test_approx_with_drone_in_same_place_is_a_duplicate():
+    # Dron quieto, persona lejana que parpadea: el tracker le da otro id cada vez.
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=10.0)
+    ev = run(reg, [[approx(1, 0.0)]] * 15 + [[]] * 20 + [[approx(2, 1.0)]] * 15
+             + [[]] * 20 + [[approx(3, 0.5)]] * 15)
+    assert kinds(ev) == ['alert', 'duplicate', 'duplicate']
+    assert reg.total == 1 and reg.person_id(3) == 1
+
+
+def test_approx_seen_together_are_never_merged():
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=10.0)
+    ev = run(reg, [[approx(1, 0.0), approx(2, 0.0), approx(3, 0.0)]] * 15
+             + [[]] * 20 + [[approx(4, 0.0), approx(5, 0.0)]] * 15)
+    # Tres a la vez = tres personas; las dos que vuelven son dos de esas tres.
+    assert kinds(ev) == ['alert'] * 3 + ['duplicate'] * 2
+    assert reg.total == 3 and reg.person_id(4) != reg.person_id(5)
+
+
+def test_approx_with_drone_far_away_is_new():
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=10.0)
+    ev = run(reg, [[approx(1, 0.0)]] * 15 + [[]] * 20 + [[approx(2, 30.0)]] * 15)
+    assert kinds(ev) == ['alert', 'alert'] and reg.total == 2
+
+
+def test_approx_dedupe_can_be_disabled_and_needs_gps():
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=0.0)
+    ev = run(reg, [[approx(1, 0.0)]] * 15 + [[]] * 20 + [[approx(2, 0.0)]] * 15)
+    assert kinds(ev) == ['alert', 'alert']
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=10.0)
+    ev = run(reg, [[obs(1)]] * 15 + [[]] * 20 + [[obs(2)]] * 15)     # sin GPS del dron
+    assert kinds(ev) == ['alert', 'alert']
+
+
+def test_approx_never_merges_with_a_located_person():
+    # Una ubicada tiene su propia posición, que puede estar lejos del dron.
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=10.0)
+    located = Observation(1, LAT0, LON0, 2.0, drone_lat=LAT0, drone_lon=LON0)
+    ev = run(reg, [[located]] * 15 + [[]] * 20 + [[approx(2, 0.0)]] * 15)
+    assert kinds(ev) == ['alert', 'alert']
+
+
 def test_reset_keeps_ids_unique():
     reg = PersonRegistry(min_seen_sec=1.0)
     run(reg, [[obs(1, 10.0)]] * 15)
