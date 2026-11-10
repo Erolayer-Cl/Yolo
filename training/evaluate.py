@@ -167,12 +167,23 @@ def draw(frame, gts, found, dets, tipo):
     return img
 
 
+def fp16_kwargs(device):
+    """fp16 como el nodo (PersonDetector._resolve_quantization): hasta ultralytics
+    8.3 era `half=True`; desde 8.4 es `quantize='fp16'` y `half` imprime un
+    warning por cada llamada. En CPU no hay fp16."""
+    if device == 'cpu':
+        return {}
+    from ultralytics.utils import DEFAULT_CFG_DICT
+    return {'quantize': 'fp16'} if 'quantize' in DEFAULT_CFG_DICT else {'half': True}
+
+
 def eval_system(model, nombre, a, images, ejemplos, params, iou_nms, classes, fns, cfg):
     _, detect_persons, results_to_boxes = fns
+    quant = fp16_kwargs(a.device)
 
     def predict_fn(imgs, imgsz, conf):        # igual que PersonDetector._predict
         res = model.predict(imgs, imgsz=imgsz, conf=conf, iou=iou_nms, classes=classes,
-                            device=a.device or None, half=True, verbose=False)
+                            device=a.device or None, verbose=False, **quant)
         return [results_to_boxes(r) for r in res]
 
     detect_persons(cv2.imread(str(images[0])), predict_fn, params)    # calentar la GPU
@@ -182,7 +193,10 @@ def eval_system(model, nombre, a, images, ejemplos, params, iou_nms, classes, fn
     out_ej = a.out / f'ejemplos_{cfg}_{nombre}'
     out_ej.mkdir(parents=True, exist_ok=True)
 
-    for img_path in images:
+    print(f'  sistema con {cfg}.yaml: {len(images)} imágenes...', flush=True)
+    for k, img_path in enumerate(images, 1):
+        if k % 200 == 0 or k == len(images):
+            print(f'    {k}/{len(images)}', flush=True)
         frame = cv2.imread(str(img_path))
         persons, ignored = read_annotations(img_path.parent.parent / 'annotations'
                                             / f'{img_path.stem}.txt')
