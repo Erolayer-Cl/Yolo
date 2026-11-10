@@ -64,7 +64,16 @@ person_detector:
       camera_hfov_deg: 90.0      # = FOV_Degrees de yolo_cam
       camera_pitch_deg: -30.0    # = Pitch de yolo_cam
       person_height_m: 0.9       # se apunta al centro de la persona
-      max_incidence_deg: 65.0    # más rasante = no se ubica (error sin control)
+      # Hasta 80°: una persona lejana se ubica con error grande (honesto, crece con
+      # 1/cos²) en vez de quedar "aproximada" en la posición del dron y duplicarse.
+      max_incidence_deg: 80.0    # más rasante = no se ubica
+      # Vuelo a mano + imagen a pocos Hz: el desfase imagen/actitud que queda tras
+      # sincronizar se cubre con más error de actitud.
+      sigma_att_deg: 2.0
+      # Actitud/GPS del instante de la imagen. image_delay_sec: cuánto antes de su
+      # stamp se sacó (ver "retraso imagen" en el log; 0 = el stamp es la captura).
+      sync: true
+      image_delay_sec: 0.0
       agl_topic: /airsim_node/PX4/distance/down
       agl_is_slant: true         # sensor fijo al cuerpo: se corrige por la inclinación
       sigma_alt_lidar: 0.3

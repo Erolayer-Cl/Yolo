@@ -313,9 +313,16 @@ con el suelo (método de `Mision_1/patrol_core/ground_projection.py`). Necesita:
 | Altura sobre el suelo | **lidar**: SITL `down` de AirSim; real `/drone/agl` (EKF de PX4 con el lidar). Sin lidar en rango: altura sobre el despegue (supone suelo plano, más error) |
 
 Error típico con lidar: **2–6 m**, más cerca del dron y con la cámara más vertical. Las
-personas a más de `max_incidence_deg` (65°) de la vertical no se ubican: ahí el error crece
-sin control. Si no se pudo, la alerta dice por qué en `geo` (`sin GPS`, `sin actitud`,
-`sin altura`, `rayo muy rasante o sobre el horizonte`).
+personas a más de `max_incidence_deg` (65°; 80° en `sitl.yaml`) de la vertical no se ubican:
+ahí el error crece sin control. Si no se pudo, la alerta dice por qué en `geo` (`sin GPS`,
+`sin actitud`, `sin altura`, `rayo muy rasante o sobre el horizonte`).
+
+**Sincronización** (`history.py`): la persona se ubica con la actitud, el GPS y la pose del
+dron en el instante de la **imagen** (su `header.stamp` menos `geolocate.image_delay_sec`), no
+con los de cuando termina la inferencia. En SITL la imagen llega 0,3–0,7 s tarde; si en ese
+tiempo el dron gira o se inclina, sin esto la persona caía 5–15 m corrida. El log cada 5 s
+muestra `retraso imagen N ms, sync X/Y` (Y = frames; X = los que se ubicaron sincronizados).
+Si los relojes no coinciden (rosbag viejo), avisa y usa los últimos valores, como antes.
 
 **Cuándo aparece el waypoint** (`persons.py`): una persona tiene que seguirse
 `counting.min_seen_sec` (2 s) antes de ponerle waypoint y alerta. Así un falso positivo de un
@@ -323,7 +330,8 @@ instante no llega al mapa, y mientras tanto se junta su mejor posición. Si a lo
 se pudo ubicar, se espera hasta `counting.max_wait_sec` (6 s); si se la deja de ver antes, se
 marca igual, como aproximada. Después se la sigue ubicando en cada frame y `/yolo/person_fix`
 avisa cuando el error baja al menos un 20 %; el mapa, la web y `personas.csv` se actualizan.
-Las cajas cortadas por el borde de la imagen no se usan para ubicarla.
+Las cajas cortadas por el borde de la imagen se ubican igual, con media caja más de error en el
+píxel (su centro no es el de la persona): si no, quedaban aproximadas y se duplicaban.
 
 **Duplicados:** si una persona sale de cuadro y vuelve, el tracker le da otro id interno, pero
 al ponerle waypoint se compara con las ya marcadas: si cae a menos de
@@ -340,7 +348,8 @@ una con el dron en el mismo lugar quedan como una (igual no tienen coordenadas d
 
 `error_m` no baja de `geolocate.sigma_gps_min` (1 m), porque PX4 puede informar 0,1 m en SITL,
 y sigue siendo una estimación: no incluye un error de montaje de la cámara, el terreno en
-pendiente ni el desfase entre imagen y GPS.
+pendiente ni el desfase entre imagen y GPS que quede después de sincronizar (en SITL se cubre
+con `sigma_att_deg: 2`).
 
 **Dron real:**
 - **Lidar** hacia abajo con alcance **mayor que la altura de vuelo** (un TFmini-S llega a
