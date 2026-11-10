@@ -45,6 +45,14 @@ python evaluate.py --repo $REPO --data $DATA --src ~/datasets/VisDrone \
 #       val_<modelo>/ (curvas) y ejemplos_<config>_<modelo>/ (imágenes)
 ```
 
+```bash
+# 5. Comparar en el SITL (sin etiquetas): los mismos frames por cada modelo
+ros2 bag record /camera -o ~/bags/vuelo1        # mientras se vuela en Unreal
+python comparar.py --src ~/bags/vuelo1           # coco, ../models/visdrone_n.pt y visdrone_s.pt
+#    -> runs/comparar/vuelo1/: comparacion.mp4 (mosaico), resumen.md, discrepancias/
+#       también acepta un video o una carpeta de imágenes; --model NOMBRE=PESOS para elegir
+```
+
 Si un paso se corta: `tune.py` salta las pruebas ya terminadas al relanzarlo, y
 `train.py --name <nombre> --resume` retoma un entrenamiento desde `last.pt`.
 
@@ -56,6 +64,7 @@ Si un paso se corta: `tune.py` salta las pruebas ya terminadas al relanzarlo, y
 | `train.py` | 2 y 3 | Configuración común (`COMUN`) y `entrenar()`; entrenamiento final desde la terminal |
 | `tune.py` | 2 | Pruebas de hiperparámetros, una a la vez, medidas en val |
 | `evaluate.py` | 4 | Métricas por tiles y del sistema completo, ejemplos visuales |
+| `comparar.py` | 5 | Modelos lado a lado sobre frames del SITL (rosbag, video o imágenes), sin etiquetas |
 
 ## Decisiones
 

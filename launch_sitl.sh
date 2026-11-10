@@ -5,11 +5,13 @@
 #
 #   ./launch_sitl.sh            # todo
 #   FOXGLOVE=0 ./launch_sitl.sh # sin foxglove_bridge (si ya tenés otro corriendo)
+#   MODEL=visdrone_s.pt ./launch_sitl.sh   # otro peso de models/ (vacío = el de sitl.yaml)
 set -e
 SESSION="yolo_sitl"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-UAV_LAB_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
+# Layout esperado: UAV_lab/Code/YOLO. Desde otro lugar: UAV_LAB_DIR=~/Workspace/UAV_lab ./launch_sitl.sh
+UAV_LAB_DIR="${UAV_LAB_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 WS_DIR="$SCRIPT_DIR"
 # PX4 v1.17.0, el mismo firmware que la Pixhawk real (compartido con
 # UAV_ros2-beta y Mision_1).
@@ -90,7 +92,7 @@ tmux select-layout -t $SESSION:sim tiled
 # Arranca más tarde: la carga del modelo compite por GPU con Unreal y PX4.
 FOX="true"; [ "${FOXGLOVE:-1}" = "0" ] && FOX="false"
 PANE_DEMO=$(tmux new-window -t $SESSION -n demo -P -F '#{pane_id}')
-tmux send-keys -t "$PANE_DEMO" "cd $WS_DIR && source $ROS_SETUP && source install/setup.bash && export YOLO_WS=$WS_DIR && sleep 12 && ros2 launch person_yolo demo.launch.py config:=sitl.yaml camera:=false foxglove:=$FOX" C-m
+tmux send-keys -t "$PANE_DEMO" "cd $WS_DIR && source $ROS_SETUP && source install/setup.bash && export YOLO_WS=$WS_DIR && sleep 12 && ros2 launch person_yolo demo.launch.py config:=sitl.yaml camera:=false foxglove:=$FOX ${MODEL:+model:=$MODEL}" C-m
 
 PANE_ECHO=$(tmux split-window -v -t "$PANE_DEMO" -l 30% -P -F '#{pane_id}')
 tmux send-keys -t "$PANE_ECHO" "cd $WS_DIR && source $ROS_SETUP && source install/setup.bash && sleep 15 && ros2 topic echo --no-daemon /drone/status --field data" C-m
