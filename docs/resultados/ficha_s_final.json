@@ -1,0 +1,150 @@
+{
+  "fecha": "2026-11-09T17:09:26",
+  "pesos": "/home/matias/yolo-ref/training/runs/train/s_final/weights/best.pt",
+  "modelo_base": "yolo11s.pt",
+  "clases": {
+    "0": "person"
+  },
+  "dataset": {
+    "data_yaml": "/home/matias/datasets/visdrone_tiles/data.yaml",
+    "origen": "VisDrone2019-DET, pedestrian + people -> person, tiles de 640",
+    "preparacion": {
+      "params": {
+        "repo": "..",
+        "src": "/home/matias/datasets/VisDrone",
+        "out": "/home/matias/datasets/visdrone_tiles",
+        "download": "True",
+        "tile": "640",
+        "overlap": "0.15",
+        "min_px": "4",
+        "bg_ratio": "0.1",
+        "seed": "0",
+        "workers": "4",
+        "limit": "0"
+      },
+      "splits": {
+        "train": {
+          "imagenes": 6471,
+          "tiles_totales": 44205,
+          "tiles_guardados": 29653,
+          "tiles_con_personas": 26688,
+          "tiles_vacios": 2965,
+          "personas": 217550,
+          "astillas_descartadas": 2754,
+          "personas_por_tamano": {
+            "16-32px": 62460,
+            "<16px": 139345,
+            ">=32px": 15745
+          }
+        },
+        "val": {
+          "imagenes": 548,
+          "tiles_totales": 2842,
+          "tiles_guardados": 2842,
+          "tiles_con_personas": 2535,
+          "tiles_vacios": 307,
+          "personas": 33592,
+          "astillas_descartadas": 336,
+          "personas_por_tamano": {
+            "16-32px": 8893,
+            "<16px": 23660,
+            ">=32px": 1039
+          }
+        },
+        "test": {
+          "imagenes": 1610,
+          "tiles_totales": 9838,
+          "tiles_guardados": 9838,
+          "tiles_con_personas": 5690,
+          "tiles_vacios": 4148,
+          "personas": 59261,
+          "astillas_descartadas": 633,
+          "personas_por_tamano": {
+            "16-32px": 8134,
+            "<16px": 49376,
+            ">=32px": 1751
+          }
+        }
+      }
+    }
+  },
+  "entrenamiento": {
+    "epocas": 50,
+    "comun": {
+      "imgsz": 640,
+      "seed": 0,
+      "deterministic": true,
+      "batch": 8,
+      "workers": 8,
+      "plots": true,
+      "exist_ok": false
+    },
+    "cambios": {},
+    "extra": {
+      "patience": 15
+    }
+  },
+  "metricas_val": {
+    "precision": 0.8228,
+    "recall": 0.6867,
+    "mAP50": 0.7669,
+    "mAP50-95": 0.3777
+  },
+  "metricas_test": {
+    "tiles": {
+      "precision": 0.6864801164202994,
+      "recall": 0.4685543612156393,
+      "mAP50": 0.5077306690388664,
+      "mAP50-95": 0.21110010637652876
+    },
+    "sistema": {
+      "sitl": {
+        "precision": 0.6496684412066872,
+        "recall": 0.5080709955445183,
+        "F1": 0.5702106730059842,
+        "recall_por_tamano": {
+          "<16px": 0.437147021315358,
+          "16-32px": 0.7824383498501959,
+          ">=32px": 0.8454461821527139
+        },
+        "personas_por_tamano": {
+          "<16px": 21956,
+          "16-32px": 4339,
+          ">=32px": 1087
+        },
+        "falsas_alarmas_por_imagen": 4.6596273291925465,
+        "ms_por_imagen": 35.86759524892073,
+        "imagenes": 1610
+      },
+      "jetson": {
+        "precision": 0.6506855703758978,
+        "recall": 0.5095318092177343,
+        "F1": 0.5715222021956415,
+        "recall_por_tamano": {
+          "<16px": 0.43883220987429405,
+          "16-32px": 0.7828992855496658,
+          ">=32px": 0.8463661453541859
+        },
+        "personas_por_tamano": {
+          "<16px": 21956,
+          "16-32px": 4339,
+          ">=32px": 1087
+        },
+        "falsas_alarmas_por_imagen": 4.6521739130434785,
+        "ms_por_imagen": 36.05798119312132,
+        "imagenes": 1610
+      }
+    }
+  },
+  "entorno": {
+    "python": "3.12.3",
+    "ultralytics": "8.4.208",
+    "torch": "2.15.0+cu132",
+    "gpu": "NVIDIA GeForce RTX 4060"
+  },
+  "limitaciones": [
+    "Entrenado con fotos reales (VisDrone, mayormente urbano); el sistema por ahora corre en SITL con Unreal: puede haber salto de dominio.",
+    "Entrenado con tiles de 640 a resolución nativa: pensado para la pasada de tiles del detector (inference.py), no para imágenes completas achicadas.",
+    "El score no es una probabilidad calibrada."
+  ]
+}

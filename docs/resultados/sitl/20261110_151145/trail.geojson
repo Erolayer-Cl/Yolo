@@ -1,0 +1,79 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6580373,
+     -33.4692242
+    ]
+   },
+   "properties": {
+    "name": "home",
+    "style": {
+     "color": "#2ecc71",
+     "radius": 8,
+     "fillOpacity": 0.9
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6580373,
+     -33.4692242
+    ]
+   },
+   "properties": {
+    "name": "persona #1: APROXIMADA, posici\u00f3n del dron",
+    "metadata": {
+     "hora": "15:11:58",
+     "score": "0.25",
+     "lat dron": "-33.469224",
+     "lon dron": "-70.658037"
+    },
+    "ubicada": false,
+    "error_m": null,
+    "score": 0.25,
+    "t": 1794334318.99,
+    "style": {
+     "color": "#e67e22",
+     "radius": 7,
+     "fillOpacity": 0.9
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6580373,
+     -33.4692242
+    ]
+   },
+   "properties": {
+    "name": "persona #2: APROXIMADA, posici\u00f3n del dron",
+    "metadata": {
+     "hora": "15:12:04",
+     "score": "0.40",
+     "lat dron": "-33.469224",
+     "lon dron": "-70.658037"
+    },
+    "ubicada": false,
+    "error_m": null,
+    "score": 0.4,
+    "t": 1794334324.27,
+    "style": {
+     "color": "#e67e22",
+     "radius": 7,
+     "fillOpacity": 0.9
+    }
+   }
+  }
+ ]
+}

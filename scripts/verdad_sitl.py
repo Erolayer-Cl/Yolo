@@ -53,6 +53,9 @@ def parse_args():
                     help='regex del actor del dron')
     ap.add_argument('--vuelo', type=Path, help='carpeta del vuelo (por defecto la última '
                     'de ~/yolo_flights)')
+    ap.add_argument('--sin-airsim', action='store_true',
+                    help='no conectarse a Unreal: rehacer el informe con el verdad.csv ya '
+                    'guardado en la carpeta del vuelo (reproducible sin el simulador)')
     ap.add_argument('--vehiculo', default='PX4')
     ap.add_argument('--host', default='localhost')
     return ap.parse_args()
@@ -200,8 +203,21 @@ def guardar(vuelo, verdad, filas):
           'detectada)')
 
 
+def leer_verdad(vuelo):
+    with open(vuelo / 'verdad.csv') as f:
+        return [(r['actor'], float(r['lat']), float(r['lon'])) for r in csv.DictReader(f)]
+
+
 def main():
     a = parse_args()
+    if a.sin_airsim:
+        vuelo = a.vuelo.expanduser() if a.vuelo else ultimo_vuelo()
+        if vuelo is None or not (vuelo / 'verdad.csv').exists():
+            sys.exit('No hay verdad.csv en el vuelo: correr antes con Unreal en Play.')
+        print(f'Vuelo: {vuelo} (verdad.csv guardado, sin AirSim)')
+        verdad = leer_verdad(vuelo)
+        informe(verdad, comparar(verdad, leer_puntos(vuelo)))
+        return
     c = conectar(a)
     if a.listar:
         listar(c)

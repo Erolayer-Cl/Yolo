@@ -1,0 +1,13 @@
+Vuelo: docs/resultados/sitl/20261110_151145 (verdad.csv guardado, sin AirSim)
+
+Personas reales: 3 | puntos marcados: 2
+
+  # estado  persona real más cercana     error real     dice  
+  1 aprox   StaticMeshActor_1               275.6 m     dron  aprox: lejos de toda persona
+  2 aprox   StaticMeshActor_1               275.6 m     dron  aprox: lejos de toda persona
+
+Resumen:
+  personas encontradas: 0/3 (faltan: StaticMeshActor_1, StaticMeshActor_3, StaticMeshActor_4)
+  puntos de más (duplicados): 0  
+  ubicados a > 15 m de toda persona (falsa alarma o mal ubicados): 0
+  aproximados lejos de toda persona (puntos sobre el dron, sin valor de rescate): 2

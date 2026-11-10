@@ -1,0 +1,20 @@
+Vuelo: docs/resultados/sitl/20261110_152146 (verdad.csv guardado, sin AirSim)
+
+Personas reales: 3 | puntos marcados: 7
+
+  # estado  persona real más cercana     error real     dice  
+  1 GPS     StaticMeshActor_1                54.9 m     ±4 m  FALSA ALARMA o muy mal ubicada
+  2 GPS     StaticMeshActor_3                 9.9 m     ±2 m  error MAYOR al que dice
+  3 GPS     StaticMeshActor_3                14.8 m     ±9 m  ok
+  4 GPS     StaticMeshActor_4                11.8 m     ±2 m  error MAYOR al que dice
+  5 GPS     StaticMeshActor_1                33.9 m    ±17 m  FALSA ALARMA o muy mal ubicada
+  6 aprox   StaticMeshActor_1                36.9 m     dron  aprox: lejos de toda persona
+  7 GPS     StaticMeshActor_4                 4.0 m     ±4 m  ok
+
+Resumen:
+  personas encontradas: 2/3 (faltan: StaticMeshActor_1)
+  puntos de más (duplicados): 2  StaticMeshActor_3: 2, StaticMeshActor_4: 2
+  ubicados a > 15 m de toda persona (falsa alarma o mal ubicados): 2
+  aproximados lejos de toda persona (puntos sobre el dron, sin valor de rescate): 1
+  error real de los ubicados: mediana 11.8 m, máx 14.8 m
+  corrimiento medio de los ubicados: +9.1 m norte, +2.0 m este (si es grande frente a la mediana: sesgo)

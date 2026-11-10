@@ -18,13 +18,107 @@ Ningún nodo publica en `/fmu/in/*`: el sistema solo **mira**, nunca comanda al 
 
 ---
 
+## Problema, usuarios y alcance
+
+**Problema.** En una búsqueda y rescate con dron, el piloto tiene que volar y a la vez
+mirar el video buscando personas. Desde 30–50 m de altura una persona ocupa pocos
+píxeles y es fácil pasarla por alto. Cuando alguien la ve, hay que traducir "la vi en
+la pantalla" a una **coordenada** para el equipo en tierra.
+
+**Usuarios.**
+- **Piloto / observador:** vuela a mano y recibe alertas y cajas sobre el video FPV.
+- **Equipo de rescate en tierra:** abre el mapa web desde un celular o notebook en la
+  red del dron y copia las coordenadas de cada persona.
+
+**Objetivo.** Mientras se vuela, detectar personas cercanas y lejanas, contar cada una
+**una sola vez** y estimar su **posición en el suelo con su error**. Todo queda en un
+mapa en vivo y en archivos después del vuelo.
+
+**Alcance.**
+
+| Dentro | Fuera |
+|---|---|
+| Detección de personas (YOLO, frame completo + tiles), conteo, geolocalización con actitud + cámara + lidar | Vuelo autónomo, planificación de rutas o cualquier comando al dron |
+| Mapa de rescate web, Foxglove, KML/GeoJSON/CSV | Identificar quién es la persona (no hay reconocimiento facial) |
+| Reentrenamiento con VisDrone y evaluación ([`training/`](training/README.md)) | Grabar video (no se graba; solo un rosbag si alguien lo pide a mano) |
+| SITL con PX4 1.17 + Unreal/Cosys-AirSim; mismo código preparado para Jetson Orin NX | Validación en el dron real (todavía no se voló, ver [docs/VALIDACION.md](docs/VALIDACION.md)) |
+
+**Estado al 2026-11-10.**
+- ✅ SITL completo funcionando, 140 tests en verde.
+- ✅ Detector reentrenado: 4× más recall que COCO en VisDrone.
+- ⚠️ Error de ubicación en SITL de ~12 m, subestimado por el sistema. Pendiente calibrar.
+- ❌ Sin vuelo real.
+
+## Documentación
+
+| Documento | Qué tiene |
+|---|---|
+| Este README | Arquitectura, instalación, uso en SITL y en el dron, ajuste de parámetros |
+| [`sim/airsim/`](sim/airsim/README.md) | Configuración de Unreal/Cosys-AirSim (`settings.json`) y qué usa el código de ella |
+| [`training/README.md`](training/README.md) | Datos (VisDrone, licencia, preparación), entrenamiento, resultados y elección del modelo |
+| [`docs/VALIDACION.md`](docs/VALIDACION.md) | Tests, métricas en VisDrone y vuelos en SITL contra la verdad de terreno |
+| [`docs/RIESGOS_Y_ETICA.md`](docs/RIESGOS_Y_ETICA.md) | Riesgos para las personas buscadas, sesgo, privacidad, seguridad, licencias |
+| [`docs/DECLARACION_IA.md`](docs/DECLARACION_IA.md) | Uso de IA generativa en el proyecto y cómo se verificó |
+| [`docs/resultados/`](docs/resultados/) | Evidencia: métricas, fichas de los modelos, salida de pytest, vuelos SITL |
+
+## Arquitectura
+
+```mermaid
+flowchart LR
+  subgraph Sim["SITL (Windows + WSL) / dron real"]
+    CAM["Cámara<br/>AirSim yolo_cam 1920x1080<br/>o camera_node (USB/CSI)"]
+    LID["Lidar hacia abajo<br/>AirSim down / PX4 dist_bottom"]
+    PX4["PX4 1.17<br/>uXRCE-DDS → /fmu/out/*"]
+  end
+
+  PX4 -->|/fmu/out/*| GPS["gps_node"]
+  GPS -->|/drone/gps, /drone/pose,<br/>/drone/attitude, /drone/status| DET
+  CAM -->|/camera| DET
+  LID -->|distance/down o /drone/agl| DET
+
+  subgraph DET["person_detector"]
+    direction TB
+    INF["inference.py<br/>YOLO frame completo + tiles<br/>→ NMS (tiling.py)"]
+    TRK["tracker.py<br/>ids, conteo"]
+    PER["persons.py<br/>waypoints, duplicados,<br/>fusión de posiciones"]
+    GEO["geolocate.py + history.py<br/>píxel → lat/lon ± error"]
+    INF --> TRK --> PER
+    GEO --> PER
+  end
+
+  DET -->|/yolo/person_alert, _fix, _merge,<br/>/yolo/person_count| TRAIL["trail_node"]
+  GPS -->|/drone/gps, /drone/pose| TRAIL
+  DET -->|/yolo/detections| FPV["fpv_node<br/>video + HUD :8080"]
+  CAM --> FPV
+  TRAIL --> WEB["Mapa de rescate web :8081"]
+  TRAIL --> FILES["~/yolo_flights/<br/>KML, GeoJSON, CSV"]
+  TRAIL -->|/drone/trail_geojson,<br/>/rescue/waypoints| FOX["Foxglove :8765"]
+  DET --> FOX
+```
+
+- **Solo lectura respecto al dron:** el único contacto con PX4 son los tópicos
+  `/fmu/out/*`.
+- **Lógica sin ROS:** inference, tiling, tracker, persons, geolocate, history, trail y
+  web_map son Python puro, con tests. `training/evaluate.py` usa el mismo
+  `detect_persons()` que el nodo, así que lo que se mide es lo que vuela.
+- **Sincronización:** cada imagen se ubica con el estado del dron del instante en que
+  se sacó, no con el de cuando terminó la inferencia (ver §7).
+
+---
+
 ## Qué hay acá
 
 ```
-YOLO/
+yolo-ref/
 ├── launch_sitl.sh / stop_sitl.sh   SITL completo en tmux (PX4 + AirSim + demo)
+├── sim/airsim/                     settings.json de Unreal/Cosys-AirSim (versionado)
+├── scripts/instalar_airsim_settings.sh   copia ese settings.json a Documents\AirSim
 ├── scripts/vendor_px4_msgs.sh      px4_msgs de PX4 1.17: ./scripts/vendor_px4_msgs.sh release/1.17
 ├── scripts/export_trt.sh           .pt -> TensorRT (.engine), en la Jetson
+├── scripts/verdad_sitl.py          posición real de las personas en Unreal vs. lo marcado
+├── scripts/calibrar_geo.py         error sistemático de la ubicación (rosbag + verdad)
+├── training/                       reentrenamiento con VisDrone y evaluación
+├── docs/                           validación, riesgos, declaración de IA, resultados
 ├── models/                         pesos (.pt / .engine), no se versionan; yolo11n.pt va acá
 └── src/person_yolo/
     ├── config/sitl.yaml            parámetros para SITL
@@ -108,26 +202,24 @@ cd src/person_yolo && python3 -m pytest -q test
 
 ## 2. Preparar AirSim para probar lejos y cerca
 
-Este proyecto usa su propia cámara y un lidar hacia abajo en el `settings.json` de
-Cosys-AirSim (Windows, `Documentos\AirSim\settings.json`), sin tocar `front_cam` (la usa
-UAV_ros2-beta). Dentro de `Vehicles.PX4`:
+Este proyecto usa su propia cámara (`yolo_cam`) y un lidar hacia abajo (`down`), sin tocar
+`front_cam` (la usa UAV_ros2-beta). El `settings.json` completo está versionado en
+[`sim/airsim/`](sim/airsim/README.md), junto con una variante que suma los sensores de
+UAV_ros2-beta. Para instalarlo en Windows (`Documents\AirSim\settings.json`):
 
-```json
-"Cameras": {
-  "yolo_cam": {
-    "CaptureSettings": [ { "ImageType": 0, "Width": 1920, "Height": 1080, "FOV_Degrees": 90 } ],
-    "X": 0.30, "Y": 0.0, "Z": -0.10, "Pitch": -30.0, "Roll": 0.0, "Yaw": 0.0
-  }
-},
-"Sensors": {
-  "down": { "SensorType": 5, "Enabled": true, "ExternalController": false,
-            "X": 0.0, "Y": 0.0, "Z": 0.3, "Pitch": -90.0, "MinDistance": 0.2, "MaxDistance": 40.0 }
-}
+```bash
+./scripts/instalar_airsim_settings.sh            # solo YOLO (con el que se midió todo)
+./scripts/instalar_airsim_settings.sh uav_ros2   # YOLO + UAV_ros2-beta
 ```
+
+El script respalda el `settings.json` anterior si era distinto.
+[`sim/airsim/README.md`](sim/airsim/README.md) explica cada campo y dónde lo usa el código.
+Lo esencial:
 
 - **1920x1080**: con menos, el tiling no aporta nada (el detector lo avisa en el log).
 - **Pitch -30°**: con la cámara horizontal casi ninguna persona lejana se puede ubicar en el
-  suelo (el rayo llega demasiado rasante). Si lo cambiás, cambiá `geolocate.camera_pitch_deg`.
+  suelo (el rayo llega demasiado rasante). Si lo cambiás, cambiá `geolocate.camera_pitch_deg`
+  (igual con `FOV_Degrees` y `camera_hfov_deg`). `test_airsim_settings.py` falla si no coinciden.
 - **`down` con `ExternalController: false`**: AirSim lo publica en
   `/airsim_node/PX4/distance/down` y lo usa el detector; PX4 no lo recibe, así que no cambia
   el vuelo de los otros proyectos. `launch_sitl.sh` remapea `yolo_cam` a `/camera`.
@@ -303,7 +395,7 @@ pierde casi nada) y una última vez al cerrar:
 | `trail.kml` | **Google Earth**: ruta en 3D + un marcador por persona |
 | `trail.geojson` | geojson.io, QGIS, Foxglove |
 | `trail.csv` | planilla: `t, lat, lon, alt_msl, alt_rel, heading_deg` |
-| `personas.csv` | **una fila por persona**: `id, t, lat, lon, ubicada, error_m, score, drone_lat, drone_lon` |
+| `personas.csv` | **una fila por persona**: `id, t, lat, lon, ubicada, error_m, score, drone_lat, drone_lon, manual` |
 
 En el mapa, **rojo** = persona ubicada en el suelo (lat/lon de la persona, con su error);
 **naranja** = no se pudo ubicar y se marca la posición del dron (columna `ubicada` = 0).
@@ -348,7 +440,7 @@ espera a tener una posición con error ≤ `counting.max_error_m` (8 m) antes de
 
 **Duplicados:** si una persona sale de cuadro y vuelve, el tracker le da otro id interno, pero
 al ponerle waypoint se compara con las ya marcadas: si cae a menos de
-`counting.dedupe_radius_m` (4 m, o 2 sigma combinados si es mayor) de una que **no** se está
+`counting.dedupe_radius_m` (4 m; 6 m en `sitl.yaml`; o 2 sigma combinados si es mayor) de una que **no** se está
 viendo en ese momento, es la misma y no se crea otro waypoint (el log dice "vuelve a estar a la
 vista"). Dos personas vistas a la vez nunca se fusionan. Límites: dos personas distintas a menos
 de ese radio, vistas en momentos distintos, quedan como una.
@@ -411,6 +503,19 @@ sin tocar código:
 - **Vista aérea** (entrenados en **VisDrone** o similares): mucho mejores para personas
   **lejanas** y vistas desde arriba. Sus clases suelen llamarse `pedestrian` y `people`.
 - Combinar un peso aéreo **con** tiling es lo más robusto para lejos.
+
+Pesos entrenados en este repo (`training/`, se copian a `models/`; no se versionan).
+Sistema completo en VisDrone test-dev con `sitl.yaml`:
+
+| Peso | Recall | Recall <16 px | Precisión | Falsas alarmas/img | ms/img (RTX 4060) |
+|---|---|---|---|---|---|
+| `yolo11n.pt` (COCO, por defecto en los YAML) | 0.119 | 0.050 | 0.775 | 0.59 | 24 |
+| `visdrone_n.pt` (`n_final`) — **recomendado para la Jetson** | 0.448 | 0.373 | 0.685 | 3.51 | 25 |
+| `visdrone_s.pt` (`s_final`) — PC con GPU de sobra | 0.508 | 0.437 | 0.650 | 4.66 | 36 |
+
+Se elige al lanzar, sin tocar el YAML: `MODEL=visdrone_n.pt ./launch_sitl.sh` o
+`ros2 launch person_yolo demo.launch.py model:=visdrone_n.pt`. Por qué esos números y
+sus límites: [`training/README.md`](training/README.md#resultados-visdrone-test-dev-1610-imágenes).
 
 Rutas relativas se buscan en el directorio actual y en `models/`, así que alcanza con dejar el
 peso en `models/` y poner `model: mi_peso.pt`.
@@ -478,3 +583,5 @@ peso en `models/` y poner `model: mi_peso.pt`.
 | `camera_node`: "Este OpenCV no tiene GStreamer" | `opencv-python` de pip tapa al de JetPack: `pip uninstall -y opencv-python opencv-python-headless` |
 | Inferencia muy lenta | Corre en CPU (lo avisa el log): revisar `torch.cuda.is_available()`; o bajar `max_rate_hz` / subir `tiling.every_n_frames` |
 | airsim_node se cae con segfault | Faltan parámetros: usar los de `launch_sitl.sh` tal cual |
+| `launch_sitl.sh`: "No existe .../dependencias/PX4-Autopilot" | El script espera el layout `UAV_lab/Code/YOLO` con `UAV_lab/dependencias/{PX4-Autopilot,Cosys-AirSim}`. Desde otra carpeta: `UAV_LAB_DIR=~/Workspace/UAV_lab ./launch_sitl.sh` (o `PX4_DIR=...` solo para PX4) |
+| La ubicación de las personas sale corrida siempre para el mismo lado | Pitch de la cámara o retraso de la imagen mal configurados: medir con `scripts/calibrar_geo.py` (ver [docs/VALIDACION.md](docs/VALIDACION.md)) |
