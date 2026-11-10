@@ -219,3 +219,34 @@ def test_bad_alert_is_rejected(bad):
 def test_bad_person_position_falls_back_to_unlocated():
     spot = spot_from_alert(alert(person_lat=float('nan'), person_lon=-70.5, person_error_m=2.0))
     assert not spot.located and spot.lat == LAT0 and math.isnan(spot.error_m)
+
+
+def test_manual_marks_are_separate_and_deletable():
+    tr = Trail()
+    tr.add(pt(0.0))
+    tr.add_person(person(1))
+    m1 = tr.add_mark(10.0, LAT0, LON0)
+    m2 = tr.add_mark(11.0, LAT0 + 1e-4, LON0)
+    assert (m1.label, m2.label) == ('M1', 'M2') and m1.id < 0 and m2.id < 0
+    wps = {w['etiqueta']: w for w in tr.rescue_waypoints()}
+    assert wps['M1']['manual'] and wps['M1']['lat'] == round(LAT0, 8)
+    assert not wps['1']['manual']
+    csv_text = tr.persons_csv()
+    assert csv_text.splitlines()[0].endswith(',manual') and '\nM2,' in csv_text
+    assert not tr.remove_mark(1)                   # las del detector no se borran a mano
+    assert tr.remove_mark(m1.id) and [p.label for p in tr.persons] == ['1', 'M2']
+    assert tr.add_mark(12.0, LAT0, LON0).label == 'M3'   # los ids no se reutilizan
+    json.dumps(tr.to_geojson())
+    ET.fromstring(tr.to_kml())
+
+
+def test_merged_person_is_removed_but_not_manual_marks():
+    tr = Trail()
+    tr.add(pt(0.0))
+    a, b = person(1), person(2)
+    tr.add_person(a)
+    tr.add_person(b)
+    tr.add_mark(5.0, LAT0, LON0)
+    assert tr.remove_person(2, b.t)
+    assert not tr.remove_person(2, b.t)            # ya no está
+    assert [p.label for p in tr.persons] == ['1', 'M1']

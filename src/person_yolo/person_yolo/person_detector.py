@@ -25,6 +25,11 @@ Publica:
                                     que la posición de una persona mejora mientras
                                     se la sigue viendo. `t` es el de su alerta
                                     (identifica a la persona); `fix_t`, el de ahora.
+                                    La posición es la FUSIÓN de todas sus
+                                    observaciones (persons.py), no la del último frame.
+  /yolo/person_merge                std_msgs/String (JSON): dos marcas eran la misma
+                                    persona: {id, t, removed_id, removed_t, total}.
+                                    La `removed` se borra del mapa.
   /yolo/person_events               std_msgs/String (JSON, solo si hay personas):
                                     t, count, total, ids, max_score, lat, lon,
                                     alt_msl, alt_rel, heading_deg, x, y, z
@@ -115,6 +120,9 @@ class PersonDetector(Node):
         self.declare_parameter('counting.dedupe_radius_m', 4.0)  # 0 = sin buscar duplicados
         # Aproximadas: misma persona si el dron está a menos de esto de donde la marcó
         self.declare_parameter('counting.dedupe_approx_radius_m', 10.0)  # 0 = apagado
+        # Esperar (hasta max_wait_sec) una posición con error <= esto antes de marcar;
+        # 0 = no esperar (marcar apenas pasa min_seen_sec, como antes).
+        self.declare_parameter('counting.max_error_m', 0.0)
 
         self.declare_parameter('annotated_scale', 1.0)
         self.declare_parameter('jpeg_quality', 75)
@@ -187,7 +195,8 @@ class PersonDetector(Node):
             max_wait_sec=float(gp('counting.max_wait_sec').value),
             forget_sec=float(gp('counting.max_age_sec').value),
             dedupe_radius_m=float(gp('counting.dedupe_radius_m').value),
-            approx_radius_m=float(gp('counting.dedupe_approx_radius_m').value))
+            approx_radius_m=float(gp('counting.dedupe_approx_radius_m').value),
+            max_error_m=float(gp('counting.max_error_m').value) or float('inf'))
         # Una persona lejana solo aparece en los frames con tiles: max_missed
         # cuenta frames CON tiles, si no se la olvidaría entre uno y otro.
         max_missed = max(1, int(gp('counting.max_missed').value))
@@ -260,6 +269,7 @@ class PersonDetector(Node):
         self.pub_total.publish(Int32(data=0))
         self.pub_alert = self.create_publisher(String, '/yolo/person_alert', 50)
         self.pub_fix = self.create_publisher(String, '/yolo/person_fix', 50)
+        self.pub_merge = self.create_publisher(String, '/yolo/person_merge', 50)
         self.create_service(Trigger, '/yolo/person_total/reset', self._on_reset_total)
         self.pub_jpg = self.create_publisher(
             CompressedImage, '/yolo/image_annotated/compressed', sensor_qos)
@@ -616,16 +626,22 @@ class PersonDetector(Node):
                                 where['heading_deg'], where['x'], where['y'], where['z']])
             self.events_csv.flush()
 
-    def _person_msg(self, t, pid, box, geo, why, where):
-        x1, y1, x2, y2, score = (float(v) for v in box[:5])
+    def _person_msg(self, t, pid, obs, why, where):
+        """`obs` es la del evento: lat/lon/error_m = posición FUSIONADA de la
+        persona (persons.py); geo/box del payload = la observación de este frame."""
+        p = obs.payload
+        geo = p['geo']
+        x1, y1, x2, y2, score = (float(v) for v in p['box'][:5])
+        if obs.located and not geo:
+            why = 'ok (fusión de observaciones anteriores)'
         return {'t': t,
                 'id': int(pid),
                 'total': self.registry.total,
                 'score': round(score, 3),
                 'bbox': [round(x1), round(y1), round(x2), round(y2)],
-                'person_lat': round(geo['lat'], 8) if geo else None,
-                'person_lon': round(geo['lon'], 8) if geo else None,
-                'person_error_m': round(geo['error_m'], 1) if geo else None,
+                'person_lat': round(obs.lat, 8) if obs.located else None,
+                'person_lon': round(obs.lon, 8) if obs.located else None,
+                'person_error_m': round(obs.error_m, 1) if obs.located else None,
                 'person_dist_m': round(geo['dist_m'], 1) if geo else None,
                 'agl_m': round(geo['agl_m'], 2) if geo else None,
                 'agl_source': geo['agl_source'] if geo else None,
@@ -655,9 +671,11 @@ class PersonDetector(Node):
     def _publish_person_events(self, events, stamp_t):
         """Alerta = waypoint nuevo (la persona se siguió counting.min_seen_sec, ver
         persons.py); fix = mejor posición de una persona ya marcada. Llevan la
-        posición de la PERSONA en el suelo si se pudo calcular, y siempre la del
-        dron en el momento de esa observación."""
-        if any(e.kind == 'alert' for e in events):
+        posición de la PERSONA en el suelo (la fusión de todas sus observaciones)
+        si se pudo calcular, y siempre la del dron en el momento de esa
+        observación. merge = dos marcas eran la misma persona: se borra una
+        (/yolo/person_merge) y la otra sale como fix con la posición combinada."""
+        if any(e.kind in ('alert', 'merge') for e in events):
             self.pub_total.publish(Int32(data=self.registry.total))
         for e in events:
             p = e.obs.payload
@@ -665,18 +683,26 @@ class PersonDetector(Node):
                 self.get_logger().info(
                     f'Persona #{e.person_id} vuelve a estar a la vista: no es nueva')
                 continue
-            m = self._person_msg(e.t, e.person_id, p['box'], p['geo'], p['why'], p['where'])
-            if e.kind == 'fix':
+            m = self._person_msg(e.t, e.person_id, e.obs, p['why'], p['where'])
+            if e.kind == 'merge':
+                rid, rt = e.removed
+                self.pub_merge.publish(String(data=json.dumps(
+                    {'id': e.person_id, 't': e.t, 'removed_id': rid, 'removed_t': rt,
+                     'total': self.registry.total})))
+                self.get_logger().info(
+                    f'Persona #{rid} era la #{e.person_id}: se unen (total '
+                    f'{self.registry.total})')
+            if e.kind in ('fix', 'merge'):
                 m['fix_t'] = stamp_t
                 self.pub_fix.publish(String(data=json.dumps(m)))
                 continue
             self.pub_alert.publish(String(data=json.dumps(m)))
             geo, why, where, pid = p['geo'], p['why'], p['where'], e.person_id
             score = float(p['box'][4])
-            if geo:
-                pos = (f'lat={geo["lat"]:.6f} lon={geo["lon"]:.6f} '
-                       f'(±{geo["error_m"]:.0f} m, a {geo["dist_m"]:.0f} m del dron, '
-                       f'altura por {geo["agl_source"]})')
+            if e.obs.located:
+                dist = f', a {geo["dist_m"]:.0f} m del dron' if geo else ''
+                pos = (f'lat={e.obs.lat:.6f} lon={e.obs.lon:.6f} '
+                       f'(±{e.obs.error_m:.0f} m{dist})')
             elif where['lat'] is not None:
                 pos = f'posición del dron lat={where["lat"]:.6f} lon={where["lon"]:.6f} ({why})'
             else:

@@ -121,8 +121,9 @@ def leer_puntos(vuelo):
             lat, lon = (r['lat'], r['lon']) if ubicada else (r['drone_lat'], r['drone_lon'])
             if not lat or not lon:
                 continue
-            out.append({'id': int(r['id']), 'lat': float(lat), 'lon': float(lon),
-                        'ubicada': ubicada,
+            manual = r.get('manual') in ('1', 'True', 'true')
+            out.append({'id': r['id'], 'lat': float(lat), 'lon': float(lon),
+                        'ubicada': ubicada, 'manual': manual,
                         'error_m': float(r['error_m']) if ubicada and r['error_m'] else None})
         return out
 
@@ -134,15 +135,25 @@ def informe(verdad, filas):
     for r in filas:
         dice = f'±{r["error_m"]:.0f} m' if r['error_m'] is not None else 'dron'
         lejos = r['err_real'] > FALSA_ALARMA_M
-        if not r['ubicada']:            # el punto es el dron: no se espera que caiga encima
+        if r['manual']:                 # a mano, en la posición del dron
+            nota = 'marca manual'
+        elif not r['ubicada']:          # el punto es el dron: no se espera que caiga encima
             nota = 'aprox: lejos de toda persona' if lejos else 'aprox: cerca de una persona'
         elif lejos:
             nota = 'FALSA ALARMA o muy mal ubicada'
+        elif r['error_m'] is None:
+            nota = 'ubicada, sin error informado'
         else:
             nota = 'ok' if r['err_real'] <= 2 * r['error_m'] else 'error MAYOR al que dice'
-        print(f'{r["id"]:>3} {"GPS" if r["ubicada"] else "aprox":7} {r["real"][:28]:28} '
+        estado = 'manual' if r['manual'] else 'GPS' if r['ubicada'] else 'aprox'
+        print(f'{r["id"]:>3} {estado:7} {r["real"][:28]:28} '
               f'{r["err_real"]:8.1f} m {dice:>8}  {nota}')
 
+    manuales = [r for r in filas if r['manual']]
+    filas = [r for r in filas if not r['manual']]      # el resumen es del detector
+    if manuales:
+        print(f'\nMarcas manuales: {len(manuales)}, a ' + ', '.join(
+            f'{r["err_real"]:.1f} m de {r["real"]}' for r in manuales))
     reales = [r for r in filas if r['err_real'] <= FALSA_ALARMA_M]
     aprox_lejos = sum(1 for r in filas if not r['ubicada'] and r['err_real'] > FALSA_ALARMA_M)
     por_persona = collections.Counter(r['real'] for r in reales)

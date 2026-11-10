@@ -60,7 +60,8 @@ YOLO/
 | `/yolo/person_count` | `std_msgs/Int32` | personas en el frame (panel **Plot**) |
 | `/yolo/person_total` | `std_msgs/Int32` | personas **distintas** vistas (cada una cuenta una sola vez) |
 | `/yolo/person_alert` | `std_msgs/String` (JSON) | **alerta** por cada persona nueva: id, total, score, **`person_lat`/`person_lon`/`person_error_m`** y la posición del dron |
-| `/yolo/person_fix` | `std_msgs/String` (JSON) | mismo formato: sale cada vez que la **posición de una persona mejora** mientras se la sigue viendo (`t` = el de su alerta, `fix_t` = ahora) |
+| `/yolo/person_fix` | `std_msgs/String` (JSON) | mismo formato: sale cada vez que la **posición de una persona mejora** mientras se la sigue viendo (`t` = el de su alerta, `fix_t` = ahora). La posición es la **fusión** de todas sus observaciones |
+| `/yolo/person_merge` | `std_msgs/String` (JSON) | dos marcas eran **la misma persona**: `{id, t, removed_id, removed_t, total}`; la `removed` se borra del mapa |
 | `/yolo/person_events` | `std_msgs/String` (JSON) | cada frame con personas: cuántas + lat/lon/altura/rumbo |
 | `/yolo/detections` | `vision_msgs/Detection2DArray` | cajas en píxeles, para otros nodos |
 | `/yolo/image_annotated/compressed` | `sensor_msgs/CompressedImage` | imagen con cajas y HUD (panel **Image**) |
@@ -237,6 +238,12 @@ sin instalar nada y sin internet. Muestra:
 - Botones del mapa: **Seguir dron**, **Ver todo**, zoom, y **Calles** (OpenStreetMap, necesita
   internet; se recuerda en el navegador).
 - Estado arriba: *En vivo*, *Sin GPS del dron* o *Sin conexión*.
+- **Marcar aquí** (arriba, o tecla **M**): agrega una marca manual **M1, M2…** (rombo azul)
+  en la posición del **dron** en ese momento. Para cuando se ve a alguien en el FPV y el
+  detector no lo marcó, o lo marcó mal: pasar por encima de la persona y apretar. Las marcas
+  van a la tabla, a `personas.csv` (`manual` = 1) y a `/rescue/waypoints`; **Borrar** en su
+  fila la quita. Solo marca el mapa: **no comanda al dron**. Sin GPS del dron el botón se
+  desactiva. Cualquiera en la red puede usarlo; `trail_node.web_marks: false` lo apaga.
 
 Las coordenadas son las del GPS: en SITL las simula Unreal (`OriginGeopoint` de AirSim), así que
 el mapa de calles no coincide con el escenario; en el dron real son las de la Pixhawk. La página
@@ -332,6 +339,12 @@ marca igual, como aproximada. Después se la sigue ubicando en cada frame y `/yo
 avisa cuando el error baja al menos un 20 %; el mapa, la web y `personas.csv` se actualizan.
 Las cajas cortadas por el borde de la imagen se ubican igual, con media caja más de error en el
 píxel (su centro no es el de la persona): si no, quedaban aproximadas y se duplicaban.
+
+**Precisión en vivo** (`persons.py`): la posición de cada persona es el **promedio de todas sus
+observaciones**, pesado por 1/error² (las cercanas y verticales pesan más), descartando las que
+caen lejos de las demás. El punto se mueve y su error baja mientras se la sigue viendo. Además se
+espera a tener una posición con error ≤ `counting.max_error_m` (8 m) antes de marcarla, hasta
+`max_wait_sec`: así una persona lejana no aparece con ±20 m si al acercarse se la ubica mejor.
 
 **Duplicados:** si una persona sale de cuadro y vuelve, el tracker le da otro id interno, pero
 al ponerle waypoint se compara con las ya marcadas: si cae a menos de

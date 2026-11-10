@@ -72,3 +72,54 @@ def test_web_state_in_metres_from_home():
 def test_web_state_without_home():
     s = Trail().web_state()
     assert s['home'] is None and s['trail'] == [] and s['persons'] == []
+
+
+def post(server, path, body=None):
+    data = json.dumps(body or {}).encode()
+    req = urllib.request.Request(f'http://127.0.0.1:{server.port}{path}', data=data,
+                                 headers={'Content-Type': 'application/json'}, method='POST')
+    return urllib.request.urlopen(req, timeout=5)
+
+
+def test_post_goes_to_callback():
+    calls = []
+
+    def on_post(path, data):
+        calls.append((path, data))
+        return 200, {'ok': True, 'lat': 1.5}
+
+    s = MapServer(0, '127.0.0.1', on_post=on_post)
+    try:
+        r = post(s, '/api/mark/delete', {'id': -2})
+        assert json.loads(r.read()) == {'ok': True, 'lat': 1.5}
+        assert calls == [('/api/mark/delete', {'id': -2})]
+    finally:
+        s.stop()
+
+
+def test_post_errors_are_reported_not_crashes():
+    def on_post(path, data):
+        if data.get('boom'):
+            raise RuntimeError('falló')
+        return 409, {'error': 'sin GPS del dron'}
+
+    s = MapServer(0, '127.0.0.1', on_post=on_post)
+    try:
+        for body, code in (({}, 409), ({'boom': 1}, 500)):
+            with pytest.raises(urllib.error.HTTPError) as exc:
+                post(s, '/api/mark', body)
+            assert exc.value.code == code and 'error' in json.loads(exc.value.read())
+        assert get(s, '/').status == 200            # el servidor sigue vivo
+    finally:
+        s.stop()
+
+
+def test_post_disabled_without_callback(server):
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        post(server, '/api/mark')
+    assert exc.value.code == 404
+
+
+def test_page_has_mark_button(server):
+    body = get(server, '/').read().decode()
+    assert 'id="bMark"' in body and '/api/mark' in body

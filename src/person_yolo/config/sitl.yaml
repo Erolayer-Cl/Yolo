@@ -49,6 +49,9 @@ person_detector:
       max_wait_sec: 6.0
       dedupe_radius_m: 6.0       # misma persona que vuelve a entrar al cuadro; 0 = apagado
       dedupe_approx_radius_m: 10.0  # aproximadas: dron a menos de esto de donde la marcó; 0 = apagado
+      # No marcar con ±20 m si acercándose se la ubica mejor: se espera (hasta
+      # max_wait_sec) una posición con error <= esto. 0 = no esperar.
+      max_error_m: 8.0
 
     annotated_scale: 1.0
     jpeg_quality: 75
@@ -110,6 +113,7 @@ trail_node:
     save_period_sec: 10.0
     grid_step_m: 50.0            # grilla del mapa centrada en home; 0 = sin grilla
     web_port: 8081               # mapa de rescate en http://localhost:8081; 0 = apagado
+    web_marks: true              # botón "Marcar aquí" (marca en la posición del dron)
 
 foxglove_bridge:
   ros__parameters:
