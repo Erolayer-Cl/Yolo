@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Comparar pesos sobre los MISMOS frames del SITL (o de cualquier video), sin etiquetas.
+"""Etapa 4: comparar pesos sobre los MISMOS frames del SITL (o de cualquier video), sin etiquetas.
 
-evaluate.py mide contra VisDrone (fotos reales con etiquetas). Esto responde
+e3_evaluar.py mide contra VisDrone (fotos reales con etiquetas). Esto responde
 otra pregunta: en Unreal, que es lo que vuela hoy, ¿qué ve cada modelo? Cada
 frame pasa por detect_persons() (la función del nodo) con los parámetros del
 YAML, los tiles cada `every_n_frames` como en vuelo, y por el mismo tracker
@@ -23,8 +23,8 @@ Sin etiquetas no hay precisión ni recall: más cajas no es mejor si son falsas
 alarmas. Mirar discrepancias/ y el video para decidir.
 
 Uso (desde training/):
-  python comparar.py --src ~/bags/vuelo1
-  python comparar.py --src vuelo.mp4 --model n=../models/visdrone_n.pt --model s=../models/visdrone_s.pt
+  python e4_comparar_sitl.py --src ~/bags/vuelo1
+  python e4_comparar_sitl.py --src vuelo.mp4 --model n=../models/visdrone_n.pt --model s=../models/visdrone_s.pt
 """
 import argparse
 import json
@@ -34,7 +34,8 @@ import cv2
 import numpy as np
 import yaml
 
-from evaluate import fp16_kwargs, import_inference, iou_matrix, load_params, person_classes
+from e2_entrenar import resolver_pesos
+from e3_evaluar import fp16_kwargs, import_inference, iou_matrix, load_params, person_classes
 
 AQUI = Path(__file__).resolve().parent
 REPO = AQUI.parent
@@ -154,7 +155,7 @@ class Corredor:
         from ultralytics import YOLO
         self.nombre, self.pesos = nombre, pesos
         self.params, self.iou, names = cfg['params'], cfg['iou'], cfg['names']
-        self.model = YOLO(pesos)
+        self.model = YOLO(resolver_pesos(pesos))
         self.classes = person_classes(self.model, names)
         self.device = a.device or None
         self.quant = fp16_kwargs(a.device)

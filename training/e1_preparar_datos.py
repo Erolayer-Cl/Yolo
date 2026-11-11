@@ -21,7 +21,7 @@ Decisiones (ver plan):
     en la división de esa imagen.
 
 Uso:
-  python prepare_visdrone.py --repo ~/UAV_lab/YOLO --src ~/datasets/VisDrone --out ~/datasets/visdrone_tiles --download
+  python e1_preparar_datos.py --repo .. --src ~/datasets/VisDrone --out ~/datasets/visdrone_tiles --download
 """
 import argparse
 import json

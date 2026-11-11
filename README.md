@@ -16,6 +16,23 @@ en la **Jetson a bordo** con una cámara USB/CSI.
 
 Ningún nodo publica en `/fmu/in/*`: el sistema solo **mira**, nunca comanda al dron.
 
+## Inicio rápido
+
+Para instalar todo desde cero, de WSL en adelante: **[docs/INSTALACION.md](docs/INSTALACION.md)**.
+Con eso instalado, todo se hace con `make` desde la raíz del repo (`make` solo lista los
+atajos):
+
+```bash
+make doctor                      # revisa que esté todo instalado (no cambia nada)
+make build && make test          # compilar y tests de la lógica
+make airsim                      # settings.json de AirSim a Documents\AirSim (con respaldo)
+make sitl MODEL=visdrone_n.pt    # con Unreal en Play: PX4 + AirSim + detector + mapa
+#   volar con QGroundControl; mapa en http://localhost:8081, FPV en http://localhost:8080
+make stop                        # guarda el vuelo en ~/yolo_flights/
+make verdad                      # con Unreal en Play: compara con la posición real de las personas
+make resultados                  # métricas de los modelos: docs/resultados/resultados.html
+```
+
 ---
 
 ## Problema, usuarios y alcance
@@ -53,7 +70,11 @@ mapa en vivo y en archivos después del vuelo.
 
 | Documento | Qué tiene |
 |---|---|
-| Este README | Arquitectura, instalación, uso en SITL y en el dron, ajuste de parámetros |
+| Este README | Arquitectura, uso en SITL y en el dron, ajuste de parámetros |
+| [`docs/INSTALACION.md`](docs/INSTALACION.md) | Instalación desde cero: Windows, WSL, ROS 2, PX4, Unreal + Cosys-AirSim, este repo; con versiones probadas |
+| [`docs/resultados/RESULTADOS.md`](docs/resultados/RESULTADOS.md) | Métricas y gráficos de los modelos (mAP, precisión, recall, F1, falsas alarmas, curvas); también en `resultados.html` |
+| [`docs/RUBRICA.md`](docs/RUBRICA.md) | Cada criterio de la rúbrica del curso → dónde está su evidencia y qué falta |
+| [`docs/INFORME.md`](docs/INFORME.md) | Esqueleto del informe técnico (EVAL-02) |
 | [`sim/airsim/`](sim/airsim/README.md) | Configuración de Unreal/Cosys-AirSim (`settings.json`) y qué usa el código de ella |
 | [`training/README.md`](training/README.md) | Datos (VisDrone, licencia, preparación), entrenamiento, resultados y elección del modelo |
 | [`docs/VALIDACION.md`](docs/VALIDACION.md) | Tests, métricas en VisDrone y vuelos en SITL contra la verdad de terreno |
@@ -99,7 +120,7 @@ flowchart LR
 - **Solo lectura respecto al dron:** el único contacto con PX4 son los tópicos
   `/fmu/out/*`.
 - **Lógica sin ROS:** inference, tiling, tracker, persons, geolocate, history, trail y
-  web_map son Python puro, con tests. `training/evaluate.py` usa el mismo
+  web_map son Python puro, con tests. `training/e3_evaluar.py` usa el mismo
   `detect_persons()` que el nodo, así que lo que se mide es lo que vuela.
 - **Sincronización:** cada imagen se ubica con el estado del dron del instante en que
   se sacó, no con el de cuando terminó la inferencia (ver §7).
@@ -110,14 +131,16 @@ flowchart LR
 
 ```
 yolo-ref/
+├── Makefile                        atajos: make doctor / build / test / sitl / resultados...
 ├── launch_sitl.sh / stop_sitl.sh   SITL completo en tmux (PX4 + AirSim + demo)
+├── scripts/verificar_entorno.sh    revisa la instalación (make doctor)
 ├── sim/airsim/                     settings.json de Unreal/Cosys-AirSim (versionado)
 ├── scripts/instalar_airsim_settings.sh   copia ese settings.json a Documents\AirSim
 ├── scripts/vendor_px4_msgs.sh      px4_msgs de PX4 1.17: ./scripts/vendor_px4_msgs.sh release/1.17
 ├── scripts/export_trt.sh           .pt -> TensorRT (.engine), en la Jetson
 ├── scripts/verdad_sitl.py          posición real de las personas en Unreal vs. lo marcado
 ├── scripts/calibrar_geo.py         error sistemático de la ubicación (rosbag + verdad)
-├── training/                       reentrenamiento con VisDrone y evaluación
+├── training/                       reentrenamiento con VisDrone: e1_ ... e5_ (etapas), entrenar_todo.sh
 ├── docs/                           validación, riesgos, declaración de IA, resultados
 ├── models/                         pesos (.pt / .engine), no se versionan; yolo11n.pt va acá
 └── src/person_yolo/
@@ -172,12 +195,14 @@ multiplica por `every_n_frames`: una persona lejana solo aparece en esos frames)
 
 ## 1. Instalar (una vez, en WSL)
 
-Se asume el entorno de `UAV_ros2-beta` ya instalado (ROS 2 Jazzy, PX4-Autopilot,
-MicroXRCEAgent, Cosys-AirSim con su `ros2/` compilado, foxglove_bridge).
+La guía completa desde cero, de Windows y WSL hasta la primera corrida, con las versiones
+probadas, está en **[docs/INSTALACION.md](docs/INSTALACION.md)**. `make doctor` dice
+qué falta. Si ya está el entorno de `UAV_ros2-beta` (ROS 2 Jazzy, PX4-Autopilot v1.17,
+MicroXRCEAgent, Cosys-AirSim con su `ros2/` compilado), alcanza con:
 
 ```bash
-sudo apt install ros-jazzy-vision-msgs ros-jazzy-foxglove-msgs   # foxglove_msgs: línea del recorrido en el mapa
-pip install --break-system-packages ultralytics                  # trae torch
+sudo apt install ros-jazzy-vision-msgs ros-jazzy-foxglove-msgs ros-jazzy-foxglove-bridge
+pip install --user --break-system-packages ultralytics "numpy<2"   # numpy<2: cv_bridge
 ```
 
 Sin `foxglove_msgs` todo funciona igual, salvo `/drone/trail_geojson`: el nodo avisa al

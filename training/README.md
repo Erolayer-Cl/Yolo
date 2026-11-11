@@ -30,7 +30,7 @@ personas vistas desde dron, y medir si mejora frente al modelo COCO actual.
 | Cita | P. Zhu, L. Wen, D. Du, X. Bian, H. Fan, Q. Hu, H. Ling, "Detection and Tracking Meet Drones Challenge", *IEEE TPAMI*, vol. 44, no. 11, pp. 7380–7399, 2021 |
 | Pesos base | `yolo11n.pt` y `yolo11s.pt` de Ultralytics, preentrenados en COCO. Ultralytics se distribuye bajo **AGPL-3.0** (uso académico permitido; uso comercial requiere su licencia Enterprise) |
 
-Lo que hace `prepare_visdrone.py` (corrida real, de la `ficha_modelo.json`; parámetros
+Lo que hace `e1_preparar_datos.py` (corrida real, de la `ficha_modelo.json`; parámetros
 `tile 640, overlap 0.15, min_px 4, bg_ratio 0.1, seed 0`):
 
 | División | Imágenes | Tiles guardados | con personas | vacíos | Personas | <16 px | 16–32 px | ≥32 px |
@@ -44,8 +44,36 @@ justo el caso que COCO resuelve mal y por el que se reentrena.
 
 ## Orden de ejecución
 
-Desde esta carpeta (`training/`), con el repo como `--repo`. Son los comandos que se
-corrieron para los pesos actuales (`n_final`, `s_final`, 2026-11-09):
+Los scripts se llaman por etapa (`e1_` a `e5_`), en el orden en que se corren:
+
+```
+training/
+├── e1_preparar_datos.py   1. VisDrone -> tiles de 640, clase única person
+├── e2_entrenar.py         2. entrenamiento (n_final, s_final) + ficha_modelo.json
+├── e3_evaluar.py          3. COCO vs n vs s en test-dev: modelo solo y sistema completo
+├── e4_comparar_sitl.py    4. los modelos lado a lado sobre un vuelo del SITL (sin etiquetas)
+├── e5_resultados.py       5. gráficos + RESULTADOS.md + resultados.html en docs/resultados/
+├── extra_tuning.py        (opcional, no ejecutado) tuning entre la 1 y la 2
+├── entrenar_todo.sh       todas las etapas en orden, saltando lo ya hecho
+├── pesos_base/            yolo11n.pt, yolo11s.pt (COCO; se bajan solos; no se versionan)
+└── runs/                  salidas de Ultralytics (no se versionan)
+```
+
+**Con un solo comando** (desde la raíz: `make entrenar`; o desde acá):
+
+```bash
+./entrenar_todo.sh                  # etapas 1 2 3 5; salta las que ya tienen su salida
+ETAPAS=5 ./entrenar_todo.sh         # solo regenerar gráficos y página (sin GPU, segundos)
+ETAPAS="3 5" REHACER=1 ./entrenar_todo.sh          # volver a evaluar
+ETAPAS=4 BAG=~/bags/vuelo1 ./entrenar_todo.sh      # comparar en el SITL
+```
+Activa solo el venv `~/venvs/yolo-train` si existe. Al final copia los pesos a
+`../models/visdrone_{n,s}.pt`.
+
+**Paso a paso.** Desde esta carpeta (`training/`), con el repo como `--repo`. Son los
+comandos que se corrieron para los pesos actuales (`n_final`, `s_final`, 2026-11-09);
+los scripts tenían otros nombres entonces (`prepare_visdrone.py`, `train.py`,
+`evaluate.py`), con el mismo código:
 
 ```bash
 cd training
@@ -53,39 +81,47 @@ REPO=..
 DATA=~/datasets/visdrone_tiles/data.yaml
 
 # 1. Datos: baja VisDrone (~2 GB) y lo corta en tiles de 640 con una sola clase, person
-python prepare_visdrone.py --repo $REPO --src ~/datasets/VisDrone --out ~/datasets/visdrone_tiles --download
+python e1_preparar_datos.py --repo $REPO --src ~/datasets/VisDrone --out ~/datasets/visdrone_tiles --download
 
 # 2. Entrenamiento: 50 épocas, patience 15, sin cambios de hiperparámetros
-python train.py --data $DATA --model yolo11n.pt --name n_final
-python train.py --data $DATA --model yolo11s.pt --name s_final
+python e2_entrenar.py --data $DATA --model yolo11n.pt --name n_final
+python e2_entrenar.py --data $DATA --model yolo11s.pt --name s_final
 #    -> runs/train/<nombre>/weights/best.pt + ficha_modelo.json (datos, entorno y métricas)
 
 # 3. Evaluación en test-dev: COCO actual vs. los dos modelos nuevos
-python evaluate.py --repo $REPO --data $DATA --src ~/datasets/VisDrone \
+python e3_evaluar.py --repo $REPO --data $DATA --src ~/datasets/VisDrone \
     --model coco=yolo11n.pt \
     --model n_final=runs/train/n_final/weights/best.pt \
     --model s_final=runs/train/s_final/weights/best.pt
 #    -> runs/eval/resumen.md: nivel 1 (tiles) y nivel 2 (sistema) con sitl.yaml y con jetson.yaml
 #       val_<modelo>/ (curvas) y ejemplos_<config>_<modelo>/ (imágenes)
 
-# 4. Usarlos en el detector
+# 5. Gráficos, tabla y página (lee runs/, no corre modelos)
+python e5_resultados.py
+#    -> ../docs/resultados/RESULTADOS.md, resultados.html, img/*.png
+
+# Usarlos en el detector
 cp runs/train/n_final/weights/best.pt ../models/visdrone_n.pt
 cp runs/train/s_final/weights/best.pt ../models/visdrone_s.pt
 ```
 
-**No ejecutado (previsto):** `tune.py` prueba hiperparámetros de a uno (A por defecto,
+**No ejecutado (previsto):** `extra_tuning.py` prueba hiperparámetros de a uno (A por defecto,
 B `scale 0.25`, C `flipud 0.5`, D = B+C) y escribe `runs/tuning/ganador.json`, que se pasa a
-`train.py --cambios`. No se corrió por tiempo: los dos modelos actuales usan los valores por
+`e2_entrenar.py --cambios`. No se corrió por tiempo: los dos modelos actuales usan los valores por
 defecto de Ultralytics (`"cambios": {}` en su ficha).
 
 ```bash
-python tune.py --data $DATA          # -> runs/tuning/tabla.md y ganador.json
-python train.py --data $DATA --model yolo11n.pt --name n_tuning --cambios runs/tuning/ganador.json
+python extra_tuning.py --data $DATA          # -> runs/tuning/tabla.md y ganador.json
+python e2_entrenar.py --data $DATA --model yolo11n.pt --name n_tuning --cambios runs/tuning/ganador.json
 ```
 
 ## Resultados (VisDrone test-dev, 1610 imágenes)
 
-Copia en [`docs/resultados/resumen.md`](../docs/resultados/resumen.md).
+**Para verlo todo junto**, con gráficos, curvas por época y glosario:
+[`docs/resultados/RESULTADOS.md`](../docs/resultados/RESULTADOS.md). Lo mismo en una
+página que se abre con doble clic, sin internet: `docs/resultados/resultados.html`. Las
+dos las genera `e5_resultados.py` desde `runs/` (copia original:
+[`docs/resultados/resumen.md`](../docs/resultados/resumen.md)).
 
 - **Nivel 1:** el modelo solo, sobre tiles (Ultralytics val).
 - **Nivel 2:** el sistema completo, con `detect_persons()` y los umbrales reales de
@@ -116,31 +152,33 @@ todavía: las cifras de ms son de la RTX 4060.
 
 **Interpretación con cuidado:**
 - Es un test con fotos reales de VisDrone, no del SITL ni del dron. En Unreal no hay
-  etiquetas: la comparación ahí es cualitativa (`comparar.py`) o por posición
+  etiquetas: la comparación ahí es cualitativa (`e4_comparar_sitl.py`) o por posición
   (`scripts/verdad_sitl.py`, ver [docs/VALIDACION.md](../docs/VALIDACION.md)).
 - Parte de las "falsas alarmas" pueden ser personas que VisDrone no anotó. No se revisó
   a mano.
 
 ```bash
-# 5. Comparar en el SITL (sin etiquetas): los mismos frames por cada modelo
+# 4. Comparar en el SITL (sin etiquetas): los mismos frames por cada modelo
 ros2 bag record /camera -o ~/bags/vuelo1        # mientras se vuela en Unreal
-python comparar.py --src ~/bags/vuelo1           # coco, ../models/visdrone_n.pt y visdrone_s.pt
+python e4_comparar_sitl.py --src ~/bags/vuelo1           # coco, ../models/visdrone_n.pt y visdrone_s.pt
 #    -> runs/comparar/vuelo1/: comparacion.mp4 (mosaico), resumen.md, discrepancias/
 #       también acepta un video o una carpeta de imágenes; --model NOMBRE=PESOS para elegir
 ```
 
-Si un paso se corta: `tune.py` salta las pruebas ya terminadas al relanzarlo, y
-`train.py --name <nombre> --resume` retoma un entrenamiento desde `last.pt`.
+Si un paso se corta: `extra_tuning.py` salta las pruebas ya terminadas al relanzarlo, y
+`e2_entrenar.py --name <nombre> --resume` retoma un entrenamiento desde `last.pt`.
 
 ## Archivos
 
 | Archivo | Etapa | Qué hace |
 |---|---|---|
-| `prepare_visdrone.py` | 1 | VisDrone -> tiles de 640 en formato YOLO, clase única `person` |
-| `train.py` | 2 | Configuración común (`COMUN`) y `entrenar()`; escribe `ficha_modelo.json` |
-| `tune.py` | (no ejecutado) | Pruebas de hiperparámetros, una a la vez, medidas en val |
-| `evaluate.py` | 3 | Métricas por tiles y del sistema completo, ejemplos visuales |
-| `comparar.py` | 5 | Modelos lado a lado sobre frames del SITL (rosbag, video o imágenes), sin etiquetas |
+| `e1_preparar_datos.py` | 1 | VisDrone -> tiles de 640 en formato YOLO, clase única `person` |
+| `e2_entrenar.py` | 2 | Configuración común (`COMUN`) y `entrenar()`; escribe `ficha_modelo.json` |
+| `extra_tuning.py` | (no ejecutado) | Pruebas de hiperparámetros, una a la vez, medidas en val |
+| `e3_evaluar.py` | 3 | Métricas por tiles y del sistema completo, ejemplos visuales |
+| `e4_comparar_sitl.py` | 4 | Modelos lado a lado sobre frames del SITL (rosbag, video o imágenes), sin etiquetas |
+| `e5_resultados.py` | 5 | Gráficos, `RESULTADOS.md` y `resultados.html` en `docs/resultados/`, leyendo solo `runs/` |
+| `entrenar_todo.sh` | 1–5 | Corre las etapas en orden (`ETAPAS=...`), salta lo ya hecho y copia los pesos a `models/` |
 
 ## Decisiones
 
@@ -153,7 +191,7 @@ Si un paso se corta: `tune.py` salta las pruebas ya terminadas al relanzarlo, y
 - **10 % de tiles vacíos en train**; en val y test se guardan todos (proporción real).
 - **Divisiones oficiales:** train para entrenar, val para tuning y para cortar el
   entrenamiento, test-dev solo para la evaluación final.
-- **Mismos `imgsz=640`, semilla y batch en todos los entrenamientos** (`COMUN` en `train.py`).
+- **Mismos `imgsz=640`, semilla y batch en todos los entrenamientos** (`COMUN` en `e2_entrenar.py`).
 - **La evaluación del sistema usa `detect_persons()` y los parámetros de `sitl.yaml` y de
   `jetson.yaml`** (lo que corre hoy y el dron real): mide lo que vuela, no una copia.
 

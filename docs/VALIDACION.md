@@ -7,7 +7,7 @@ y copiado en [`resultados/`](resultados/).
 | Nivel | Qué mide | Datos | Herramienta | Estado |
 |---|---|---|---|---|
 | 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 140 tests en verde |
-| 2. Detector | Cuántas personas encuentra y cuántas inventa | VisDrone test-dev, 1610 imágenes etiquetadas | `training/evaluate.py` | ✅ hecho |
+| 2. Detector | Cuántas personas encuentra y cuántas inventa | VisDrone test-dev, 1610 imágenes etiquetadas | `training/e3_evaluar.py` | ✅ hecho |
 | 3. Sistema en SITL | Si el punto del mapa cae donde está la persona | Vuelos en Unreal + posición real de cada actor | `scripts/verdad_sitl.py` | ⚠️ 3 vuelos, resultados malos de ubicación (ver abajo) |
 | 4. Dron real | Todo lo anterior con cámara y GPS reales | — | — | ❌ no hecho |
 
@@ -38,6 +38,7 @@ Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (140 passed, 2
 ## 2. Detector en VisDrone test-dev
 
 Detalle, decisiones y lectura en [`training/README.md`](../training/README.md#resultados-visdrone-test-dev-1610-imágenes).
+Tablas completas y gráficos: [`resultados/RESULTADOS.md`](resultados/RESULTADOS.md).
 Datos: [`resultados/resumen.md`](resultados/resumen.md), [`resumen.json`](resultados/resumen.json)
 y las fichas de cada modelo ([`ficha_n_final.json`](resultados/ficha_n_final.json),
 [`ficha_s_final.json`](resultados/ficha_s_final.json)).
@@ -117,7 +118,7 @@ con la versión actual (`b86618a`, que cambia la fusión de posiciones y los dup
 1. Volar con la versión actual a 20–40 m, con rosbag (`ros2 bag record /camera /drone/... `).
 2. `calibrar_geo.py` con ese rosbag → corregir `camera_pitch_deg` / `image_delay_sec`.
 3. Repetir `verdad_sitl.py` y comparar la mediana de error real antes y después.
-4. `training/comparar.py` sobre el mismo rosbag para ver COCO, `n` y `s` en el dominio
+4. `training/e4_comparar_sitl.py` sobre el mismo rosbag para ver COCO, `n` y `s` en el dominio
    Unreal.
 
 ---

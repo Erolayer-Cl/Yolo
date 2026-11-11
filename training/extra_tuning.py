@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Etapa 2: tuning manual, cambiando UN hiperparámetro a la vez.
+"""Extra (NO ejecutado para los pesos actuales): tuning manual, cambiando UN
+hiperparámetro a la vez. Va entre la etapa 1 y la 2 si se quiere usar.
 
   A  valores por defecto                   (base)
   B  scale 0.5 -> 0.25                     achicar menos: las personas chicas no desaparecen
   C  flipud 0 -> 0.5                       desde arriba no hay "arriba": más variedad gratis
   D  B + C                                 solo si B y C ayudaron cada uno
 
-Todas con yolo11n, pocas épocas, misma semilla y los mismos datos (train.py),
+Todas con yolo11n, pocas épocas, misma semilla y los mismos datos (e2_entrenar.py),
 medidas en VAL. test no se toca: si se eligieran hiperparámetros mirando test,
 la evaluación final dejaría de ser honesta.
 
@@ -17,17 +18,17 @@ Cada prueba es un entrenamiento de horas: si el script se corta, al volver a
 correrlo salta las pruebas ya terminadas (quedan en resultados.json).
 
 Uso:
-  python tune.py --data ~/datasets/visdrone_tiles/data.yaml
+  python extra_tuning.py --data ~/datasets/visdrone_tiles/data.yaml
 Salida (en runs/tuning/):
   resultados.json  métricas de cada prueba
   tabla.md         tabla comparativa para el informe
-  ganador.json     hiperparámetros elegidos -> train.py --cambios
+  ganador.json     hiperparámetros elegidos -> e2_entrenar.py --cambios
 """
 import argparse
 import json
 from pathlib import Path
 
-from train import COMUN, entrenar
+from e2_entrenar import COMUN, entrenar
 
 PRUEBAS = {
     'A': {},
@@ -76,7 +77,7 @@ def tabla(resultados):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Tuning manual (etapa 2).')
+    ap = argparse.ArgumentParser(description='Extra: tuning manual (no ejecutado).')
     ap.add_argument('--data', required=True, type=Path)
     ap.add_argument('--epochs', type=int, default=20)
     ap.add_argument('--min-mejora', type=float, default=0.005, help='mejora mínima de recall')

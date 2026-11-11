@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Etapa 4: comparar modelos en VisDrone test-dev (test nunca se usó para decidir nada).
+"""Etapa 3: comparar modelos en VisDrone test-dev (test nunca se usó para decidir nada).
 
 Dos niveles, para cada modelo:
 
@@ -24,17 +24,17 @@ Limitación: en vuelo los tiles corren cada `every_n_frames` frames; acá corren
 en todas las imágenes. Esto mide el mejor caso por imagen.
 
 Uso:
-  python evaluate.py --repo ~/UAV_lab/YOLO \\
+  python e3_evaluar.py --repo .. \\
       --data ~/datasets/visdrone_tiles/data.yaml --src ~/datasets/VisDrone \\
       --model coco=yolo11n.pt \\
-      --model n_sin_tuning=runs/train/n_sin_tuning/weights/best.pt \\
-      --model n_con_tuning=runs/train/n_con_tuning/weights/best.pt \\
-      --model s_con_tuning=runs/train/s_con_tuning/weights/best.pt
+      --model n_final=runs/train/n_final/weights/best.pt \\
+      --model s_final=runs/train/s_final/weights/best.pt
 Por defecto el nivel 2 se mide con sitl.yaml (lo que corre hoy) y con jetson.yaml
 (el dron real); --config permite elegir otros.
 Salida (en runs/eval/): resumen.md, resumen.json, val_<modelo>/ y
 ejemplos_<config>_<modelo>/.
-Si junto a los pesos está la ficha_modelo.json de train.py, completa `metricas_test`.
+Si junto a los pesos está la ficha_modelo.json de e2_entrenar.py, completa `metricas_test`.
+Los gráficos y la página de resultados los arma después e5_resultados.py.
 """
 import argparse
 import json
@@ -47,14 +47,15 @@ import numpy as np
 import yaml
 
 # Reutiliza la lectura de anotaciones de la etapa 1: mismas clases, mismas regiones ignoradas.
-from prepare_visdrone import read_annotations
+from e1_preparar_datos import read_annotations
+from e2_entrenar import resolver_pesos
 
 TAMANOS = ('<16px', '16-32px', '>=32px')
 VERDE, ROJO, AMARILLO = (0, 200, 0), (0, 0, 255), (0, 220, 255)
 
 
 def parse_args():
-    ap = argparse.ArgumentParser(description='Evaluación y comparación de modelos (etapa 4).')
+    ap = argparse.ArgumentParser(description='Evaluación y comparación de modelos (etapa 3).')
     ap.add_argument('--repo', required=True, type=Path, help='raíz del repo yolo')
     ap.add_argument('--data', required=True, type=Path, help='data.yaml de los tiles')
     ap.add_argument('--src', required=True, type=Path, help='carpeta con VisDrone2019-DET-test-dev')
@@ -294,7 +295,7 @@ def main():
     for spec in a.model:
         nombre, _, pesos = spec.partition('=')
         print(f'\n=== {nombre} ({pesos}) ===')
-        model = YOLO(pesos)
+        model = YOLO(resolver_pesos(pesos))
         classes = person_classes(model, names_wanted)
         res[nombre] = {'pesos': pesos,
                        # Nivel 1 no depende del YAML del detector: se calcula una vez.
