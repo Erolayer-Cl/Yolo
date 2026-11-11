@@ -49,8 +49,6 @@ def parse_args():
     ap.add_argument('--personas', default=r'(?i).*(person|persona|human|humano|character|'
                     r'metahuman|mannequin|maniqui|npc|civil).*',
                     help='regex de los nombres de actor de las personas')
-    ap.add_argument('--dron', default=r'(?i).*(flyingpawn|px4|drone|multirotor).*',
-                    help='regex del actor del dron')
     ap.add_argument('--vuelo', type=Path, help='carpeta del vuelo (por defecto la última '
                     'de ~/yolo_flights)')
     ap.add_argument('--sin-airsim', action='store_true',
@@ -79,15 +77,18 @@ def listar(c):
 def posiciones(c, a):
     """[(actor, lat, lon)] de las personas, con el GPS simulado del dron."""
     objs = c.simListSceneObjects('.*')
-    dron = [o for o in objs if re.fullmatch(a.dron, o)]
-    if not dron:
-        sys.exit(f'No encuentro el actor del dron con {a.dron!r}: --listar y --dron')
-    personas = [o for o in objs if re.fullmatch(a.personas, o) and o not in dron]
+    personas = [o for o in objs if re.fullmatch(a.personas, o) and o != a.vehiculo]
     if not personas:
-        sys.exit(f'Ningún actor coincide con {a.personas!r}: --listar y --personas')
+        sys.exit(f'Ningún actor coincide con {a.personas!r} (tiene que calzar el nombre '
+                 'completo): --listar y --personas')
     # Pose del dron y su GPS en el mismo momento: las personas se ubican
     # relativas al dron, así no importa dónde está el origen del mundo.
-    pd = c.simGetObjectPose(dron[0]).position
+    # La pose es la del VEHÍCULO, no la de un actor buscado por nombre: el actor
+    # SimModeWorldMultiRotor_0 también calza con "multirotor" pero no se mueve,
+    # y con el dron lejos de él corría todas las personas (61 m el 2026-11-11).
+    pd = c.simGetVehiclePose(vehicle_name=a.vehiculo).position
+    if any(math.isnan(v) for v in (pd.x_val, pd.y_val)):
+        sys.exit(f'AirSim no da la pose del vehículo {a.vehiculo!r}: ¿--vehiculo?')
     g = c.getGpsData(vehicle_name=a.vehiculo).gnss.geo_point
     out = []
     for p in personas:
@@ -97,7 +98,7 @@ def posiciones(c, a):
         lat, lon = offset_to_latlon(g.latitude, g.longitude,
                                     pp.x_val - pd.x_val, pp.y_val - pd.y_val)
         out.append((p, lat, lon))
-    print(f'Dron: actor {dron[0]}, GPS {g.latitude:.6f}, {g.longitude:.6f}')
+    print(f'Dron: vehículo {a.vehiculo}, GPS {g.latitude:.6f}, {g.longitude:.6f}')
     return out
 
 

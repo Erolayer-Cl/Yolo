@@ -3,6 +3,8 @@
 SHELL := /bin/bash
 ROS := source /opt/ros/jazzy/setup.bash
 MODEL ?=
+# Actores de las personas en World_Demo (proyecto Pruebas); otro mapa: PERSONAS='BP_Persona.*'
+PERSONAS ?= StaticMeshActor_.*
 
 .DEFAULT_GOAL := help
 .PHONY: help doctor build test airsim sitl stop verdad informe-vuelo entrenar resultados
@@ -31,7 +33,7 @@ stop: ## para el SITL y guarda el recorrido en ~/yolo_flights/
 	./stop_sitl.sh
 
 verdad: ## con Unreal en Play: posición real de las personas vs. el último vuelo
-	python3 scripts/verdad_sitl.py
+	python3 scripts/verdad_sitl.py --personas '$(PERSONAS)'
 
 informe-vuelo: ## lo mismo sin Unreal, desde el verdad.csv ya guardado del último vuelo
 	python3 scripts/verdad_sitl.py --sin-airsim

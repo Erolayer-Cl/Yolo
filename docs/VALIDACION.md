@@ -8,7 +8,7 @@ y copiado en [`resultados/`](resultados/).
 |---|---|---|---|---|
 | 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 140 tests en verde |
 | 2. Detector | Cuántas personas encuentra y cuántas inventa | VisDrone test-dev, 1610 imágenes etiquetadas | `training/e3_evaluar.py` | ✅ hecho |
-| 3. Sistema en SITL | Si el punto del mapa cae donde está la persona | Vuelos en Unreal + posición real de cada actor | `scripts/verdad_sitl.py` | ⚠️ 3 vuelos, resultados malos de ubicación (ver abajo) |
+| 3. Sistema en SITL | Si el punto del mapa cae donde está la persona | Vuelos en Unreal + posición real de cada actor | `scripts/verdad_sitl.py` | ⚠️ 4 vuelos, resultados malos de ubicación (ver abajo) |
 | 4. Dron real | Todo lo anterior con cámara y GPS reales | — | — | ❌ no hecho |
 
 ---
@@ -92,9 +92,18 @@ Datos de cada vuelo en [`resultados/sitl/`](resultados/sitl/): `personas.csv`, `
 | `20261110_145432` | `19a97cc` | 192 s / 3.7 m | 2 de 3 | 20 | 3 | 14 lejos de toda persona | mediana 11.6 m, máx 11.9 m | ±1.2–1.3 m |
 | `20261110_151145` | `f9fdb56` | sin despegar | 0 de 3 | 2 | 0 | 2 (falsas alarmas en tierra) | — | — |
 | `20261110_152146` | `f9fdb56` | 128 s / 33.2 m | 2 de 3 | 7 | 2 | 1 | mediana 11.8 m, máx 14.8 m | ±1.6–17.3 m |
+| `20261111_160740` | `fb9e3cb` | 573 s / 28.3 m | 2 de 3 | 14 (13 + 1 manual) | 2 | 4 (al aterrizar) | mediana 11.4 m, máx 14.6 m | ±2–4 m en los 4 cerca de una persona; ±2–12 m en los 9 ubicados |
 
-"Versión del código" es el último commit anterior a la hora del vuelo. Ninguno se voló
-con la versión actual (`b86618a`, que cambia la fusión de posiciones y los duplicados).
+"Versión del código" es el último commit anterior a la hora del vuelo. Los tres primeros
+son anteriores a `b86618a` (fusión de posiciones y de duplicados); el cuarto ya la tiene.
+Los cuatro usaron el peso por defecto de `sitl.yaml`, COCO `yolo11n.pt` (en el cuarto
+consta: se lanzó con `make sitl`, sin `MODEL=`).
+
+El vuelo 4 destapó un error en `verdad_sitl.py`: tomaba como dron al actor
+`SimModeWorldMultiRotor_0`, que no se mueve, en vez del vehículo `PX4`. Con el dron lejos
+de ese actor, todas las personas reales se corrían 61 m. Corregido: ahora usa la pose del
+vehículo. Las posiciones reales de los vuelos 1–3 coinciden a menos de 1 m con las
+corregidas, así que sus informes siguen valiendo.
 
 **Lectura:**
 - **El error de ubicación está subestimado.** Con el dron a 33 m, el error real es de
@@ -102,21 +111,30 @@ con la versión actual (`b86618a`, que cambia la fusión de posiciones y los dup
   puntos se corren en promedio **+9.1 m al norte**. Que vayan todos para el mismo lado
   apunta a un error sistemático (pitch de la cámara, retraso de la imagen o altura), no a
   ruido. `scripts/calibrar_geo.py` está hecho para medir ese error con un rosbag y la
-  verdad de terreno. **Todavía no se corrió.**
+  verdad de terreno. **Todavía no se corrió.** El vuelo 4 lo repite con el código
+  actual: a ~25 m, error real de mediana 11.4 m contra ±2–4 m informados, y corrimiento
+  medio **+6.0 m al norte**, +2.4 m al este.
+- **Falsas alarmas lejanas con coordenada** (vuelo 4): los puntos 1–3 quedaron a 145–257 m
+  de toda persona, con error informado de ±4–12 m. Se marcaron a 108–228 m del dron, donde
+  una persona mide pocos píxeles. Qué objeto confundió el detector no se revisó (no hubo
+  rosbag).
 - **Volando bajo casi nada se ubica.** A 3.7 m de altura, el rayo hacia una persona a
   20–50 m pasa los 80° de incidencia (`max_incidence_deg`). Esas personas quedan
   "aproximadas" en la posición del dron y se repiten (14 de 20 puntos en el vuelo 1).
   Es el comportamiento diseñado, pero muestra que el sistema necesita altura para servir.
-- **Duplicados:** 2–3 por vuelo. La versión `b86618a` agregó la fusión de duplicados
-  después de estos vuelos; falta medir si los reduce.
+- **Duplicados:** 2–3 por vuelo, también en el vuelo 4, que ya tiene la fusión de
+  duplicados de `b86618a` (`StaticMeshActor_3` quedó 3 veces). Las 3 personas están a
+  menos de 15 m entre sí, así que no se puede separar bien un duplicado de una persona
+  vecina. Hacen falta personas más separadas para medirlo.
 - **Falsas alarmas en tierra** (vuelo 2): con el dron apoyado, el detector marcó 2
   personas inexistentes, con score 0.25 y 0.40. Son scores bajos, cerca del umbral de
   tiles (0.25).
-- **Muestra chica:** 3 personas y 2 vuelos útiles. Sirve para encontrar problemas, no
+- **Muestra chica:** 3 personas y 3 vuelos útiles. Sirve para encontrar problemas, no
   para dar un porcentaje de acierto.
 
 **Próximos pasos de validación:**
-1. Volar con la versión actual a 20–40 m, con rosbag (`ros2 bag record /camera /drone/... `).
+1. Volar con la versión actual a 20–40 m (hecho, vuelo 4) **con rosbag**
+   (`ros2 bag record /camera /drone/... `) y con `MODEL=visdrone_n.pt`.
 2. `calibrar_geo.py` con ese rosbag → corregir `camera_pitch_deg` / `image_delay_sec`.
 3. Repetir `verdad_sitl.py` y comparar la mediana de error real antes y después.
 4. `training/e4_comparar_sitl.py` sobre el mismo rosbag para ver COCO, `n` y `s` en el dominio
@@ -128,7 +146,6 @@ con la versión actual (`b86618a`, que cambia la fusión de posiciones y los dup
 
 - **Dron real:** no se voló con la Jetson. Las cifras de tiempo son de una RTX 4060, no de
   la Orin NX con TensorRT.
-- **Modelos VisDrone en SITL:** los vuelos con verdad de terreno usaron el peso por defecto
-  de `sitl.yaml` (COCO `yolo11n.pt`), salvo que se haya lanzado con `MODEL=` (no quedó
-  registrado).
+- **Modelos VisDrone en SITL:** ningún vuelo con verdad de terreno usó `visdrone_n` ni
+  `visdrone_s`. Todos usaron el peso por defecto de `sitl.yaml`, COCO `yolo11n.pt`.
 - **Personas en movimiento:** `verdad_sitl.py` supone personas quietas.
