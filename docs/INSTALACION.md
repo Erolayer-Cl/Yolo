@@ -21,7 +21,8 @@ Con otras versiones puede funcionar, pero no está probado.
 | Micro XRCE-DDS Agent | 2.4.2 | WSL |
 | PX4-Autopilot | v1.17.0 | WSL |
 | Unreal Engine | 5.8 | Windows |
-| Cosys-AirSim | 5.8-v3.4.1 (plugin en Windows, `ros2/` en WSL) | los dos |
+| Cosys-AirSim | plugin 3.5.0 precompilado (Windows); `ros2/` del tag 5.8-v3.4.1 (WSL) | los dos |
+| Proyecto de Unreal | `Pruebas` (mapa `World_Demo`), no versionado: ver paso 5a | Windows |
 | Python del detector | 3.12.3, `ultralytics` 8.4.123, torch 2.13.0, numpy < 2 | WSL |
 | QGroundControl | la última estable | Windows |
 
@@ -134,8 +135,9 @@ espera a AirSim.
 
 1. Instalar el **Epic Games Launcher** (<https://www.unrealengine.com/download>), y desde la
    pestaña *Unreal Engine* instalar **5.8.x**.
-2. Bajar de <https://github.com/Cosys-Lab/Cosys-AirSim/releases> la release
-   **5.8-v3.4.1**, que trae dos cosas:
+2. Bajar de <https://github.com/Cosys-Lab/Cosys-AirSim/releases> la release para UE 5.8.
+   El equipo usa el plugin **3.5.0** (`AirSim_plugin_Windows_58_350`). La release trae
+   dos cosas:
    - El **plugin precompilado** para UE 5.8 en Windows.
    - El proyecto de ejemplo **Blocks**.
 
@@ -144,9 +146,34 @@ espera a AirSim.
 3. Descomprimir Blocks, crear `Blocks/Plugins/` y poner adentro la carpeta `AirSim` del
    plugin. Doble clic en `Blocks.uproject`: compila el proyecto y abre Unreal.
    (Para usar el plugin en otro proyecto: `docs/unreal_custenv.md` de Cosys-AirSim.)
-4. ✏️ **Equipo: indicar qué proyecto/mapa de Unreal se usó para las pruebas** (en la PC
-   del equipo hay `DronUAV`, `Pruebas` y otros en `Documents\Unreal Projects`) y cómo
-   conseguirlo, o si alcanza con Blocks + personas agregadas a mano.
+4. **El proyecto que usa el equipo es `Pruebas`**
+   (`Documents\Unreal Projects\Pruebas\Pruebas.uproject`). Lo que tiene:
+
+   | | |
+   |---|---|
+   | Motor | UE 5.8 (`"EngineAssociation": "5.8"`) |
+   | Plugin | `Plugins\AirSim_plugin_Windows_58_350\AirSim`: Cosys-AirSim **3.5.0** precompilado para UE 5.8.0, el zip `AirSim_plugin_Windows_58_350` de las releases |
+   | Mapa | **`World_Demo`**, del pack gratuito *FREE Stylized Forest Sample* de StyleHex (`Content/StyleHex_Studio/FREE_Stylized_Forest_Sample/Levels/World_Demo`). Es el de todos los vuelos de `docs/resultados/sitl/`. El proyecto también tiene `Untitled` y `Demo` (Vefects *Free Fire*), que no se usan |
+   | Personas | Agregadas a mano en el mapa (ver [`sim/airsim/README.md`](../sim/airsim/README.md)) |
+
+   **No está en git.** Ocupa 6,2 GB y los packs de escena son de Fab, con su licencia de
+   uso: no se pueden redistribuir. Para armar uno equivalente en otra PC:
+   1. Crear un proyecto vacío de UE 5.8.
+   2. Crearle la carpeta `Plugins/` y poner adentro la carpeta `AirSim` del zip del
+      plugin, como con Blocks.
+   3. Agregar el pack *FREE Stylized Forest Sample* desde Fab (gratis, con cuenta de Epic).
+   4. Abrir `World_Demo`.
+   5. En *World Settings*, poner como GameMode el de AirSim (`AirSimGameMode`), según
+      `docs/unreal_custenv.md` de Cosys-AirSim.
+   6. Poner personas a 5, 20, 50 y 100 m del despegue.
+
+   Si alcanza con algo más simple, Blocks con personas agregadas funciona igual. Lo único
+   que el código necesita del mapa es el `settings.json` de `sim/airsim/`.
+
+   > Versiones: el plugin de Windows es la **3.5.0** y el `ros2/` de WSL (paso 5b) está
+   > compilado del tag **5.8-v3.4.1**. Así funciona en la PC del equipo, pero si
+   > `airsim_node` falla al conectarse, lo primero es usar la misma versión de los dos
+   > lados.
 5. En Unreal: *Edit → Editor Preferences → Performance* → desmarcar **Use Less CPU when
    in Background**. Si no, Unreal se pone lento cuando QGroundControl tiene el foco.
 

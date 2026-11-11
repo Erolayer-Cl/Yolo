@@ -62,8 +62,8 @@ COCO no encuentra a ninguna de las personas del cruce, todas de pocos píxeles.
 `n_final` encuentra varias y agrega falsas alarmas. Algunas de esas falsas alarmas
 podrían ser personas que VisDrone no anotó; no se revisó a mano.
 
-Curvas de entrenamiento: [`img/curvas_n_final.png`](resultados/img/curvas_n_final.png),
-[`img/curvas_s_final.png`](resultados/img/curvas_s_final.png). Curvas
+Curvas de entrenamiento de los dos modelos:
+[`img/curvas_entrenamiento.png`](resultados/img/curvas_entrenamiento.png). Curvas
 precisión-recall: [`img/pr_n_final.png`](resultados/img/pr_n_final.png),
 [`img/pr_s_final.png`](resultados/img/pr_s_final.png).
 
@@ -71,8 +71,9 @@ precisión-recall: [`img/pr_n_final.png`](resultados/img/pr_n_final.png),
 
 ## 3. Sistema completo en SITL, contra la verdad de terreno
 
-**Método:** se vuela a mano en Unreal con 3 personas (actores `StaticMeshActor_1/3/4`)
-puestas en la escena. Al terminar, `verdad_sitl.py` le pide a AirSim la posición real de
+**Método:** se vuela a mano en Unreal (proyecto `Pruebas`, mapa `World_Demo`: un bosque
+estilizado, ver [INSTALACION.md](INSTALACION.md) paso 5a) con 3 personas (actores
+`StaticMeshActor_1/3/4`) puestas en la escena. Al terminar, `verdad_sitl.py` le pide a AirSim la posición real de
 cada actor y la pasa a lat/lon con el mismo GPS simulado del dron. Después compara cada
 punto de `personas.csv` con la persona real más cercana. Un punto a más de 15 m de toda
 persona cuenta como falsa alarma.

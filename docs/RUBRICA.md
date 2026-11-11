@@ -21,7 +21,7 @@ declarado. Por eso, cada cifra de `docs/` apunta al archivo que la generó.
 | 3 | Técnica/modelo y decisión (15) | Comparación de COCO vs `n_final` vs `s_final` en dos niveles: [RESULTADOS.md](resultados/RESULTADOS.md), [training/README: Resultados](../training/README.md#resultados-visdrone-test-dev-1610-imágenes) (decisión y supuestos) | ⚠️ | Sin tuning de hiperparámetros ni varias semillas (declarado). Sin medir ms en la Jetson |
 | 4 | Arquitectura e integración (20) | [README: Arquitectura](../README.md#arquitectura) (diagrama y tópicos), SITL completo con `make sitl` | ✅ | — |
 | 5 | Validación y resultados (20) | [VALIDACION.md](VALIDACION.md): tests, VisDrone en dos niveles, SITL contra verdad de terreno, análisis de errores y lo no validado; [resultados/](resultados/) | ⚠️ | Volar el SITL con el código actual a 20–40 m y correr `calibrar_geo.py` (los 3 vuelos guardados son de commits viejos) |
-| 6 | Reproducibilidad y demostración (15) | [INSTALACION.md](INSTALACION.md) desde cero, `make doctor`, `make` (atajos), [requirements.txt](../training/requirements.txt), `sim/airsim/` versionado, `make informe-vuelo` y `make resultados` rehacen los informes sin GPU ni Unreal | ⚠️ ✏️ | Confirmar el proyecto de Unreal (INSTALACION 5a) y la compilación de AirLib (5b). Ensayar la demo |
+| 6 | Reproducibilidad y demostración (15) | [INSTALACION.md](INSTALACION.md) desde cero, `make doctor`, `make` (atajos), [requirements.txt](../training/requirements.txt), `sim/airsim/` versionado, `make informe-vuelo` y `make resultados` rehacen los informes sin GPU ni Unreal | ⚠️ ✏️ | Proyecto de Unreal documentado (`Pruebas`, INSTALACION 5a). Falta confirmar cómo se compiló AirLib (5b) y ensayar la demo |
 | 7 | Responsabilidad, seguridad e IA (5) | [RIESGOS_Y_ETICA.md](RIESGOS_Y_ETICA.md), [DECLARACION_IA.md](DECLARACION_IA.md) | ⚠️ ✏️ | Completar las ✏️ de DECLARACION_IA. Corregir la seguridad de la web (§4 de RIESGOS) |
 
 ## EVAL-02: informe y defensa (30 %, 27-11-2026)
@@ -42,7 +42,7 @@ El informe es [INFORME.md](INFORME.md) (esqueleto con las 8 secciones en este or
 ## Antes del 13-11 (orden sugerido)
 
 1. Completar las ✏️ de [DECLARACION_IA.md](DECLARACION_IA.md) y de
-   [INSTALACION.md](INSTALACION.md) (pasos 5a y 5b).
+   [INSTALACION.md](INSTALACION.md) (paso 5b).
 2. Volar el SITL con `make sitl MODEL=visdrone_n.pt` a 20–40 m. Después correr
    `make verdad`, copiar el vuelo a `resultados/sitl/` y actualizar VALIDACION §3.
 3. Ensayar la demo de punta a punta: Unreal en Play → `make sitl` → volar → mapa `:8081` →
