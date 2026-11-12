@@ -8,7 +8,7 @@ y qué hace o no hace para mitigarlos. Donde la mitigación todavía no está, s
 | Riesgo | Por qué pasa | Mitigación | Estado |
 |---|---|---|---|
 | **No detectar a alguien** (falso negativo) y que se dé una zona por revisada | Recall de 0.45 en VisDrone con `n_final`: más de la mitad de las personas reales no se detecta, sobre todo las de < 16 px (recall 0.37). Ver [VALIDACION.md](VALIDACION.md) | El sistema **asiste** al observador, no lo reemplaza. El piloto sigue viendo el video FPV completo. El botón **Marcar aquí** agrega a quien el detector no marcó | Hay que decirlo explícitamente en la operación: "sin alerta" **no** significa "no hay nadie" |
-| **Mandar al equipo a un lugar equivocado** | En SITL, el error real de ubicación fue de ~12 m (mediana), mientras el sistema informaba ±1–3 m | Cada punto lleva su error y una zona de búsqueda de 2σ. Las aproximadas se marcan aparte y nunca dan coordenadas de rescate (`lat/lon = null`) | ⚠️ El error informado está **subestimado**. Pendiente calibrar (`calibrar_geo.py`) antes de confiar en el radio |
+| **Mandar al equipo a un lugar equivocado** | En SITL, el error real de ubicación fue de ~12 m (mediana), mientras el sistema informaba ±1–3 m. La persona real cayó dentro de la zona de 2σ en 0 de 4 puntos ubicados del vuelo 4 (calibrado serían ~86 %; `resultados/sitl/20261111_160740/informe.txt`) | Cada punto lleva su error y una zona de búsqueda de 2σ. Las aproximadas se marcan aparte y nunca dan coordenadas de rescate (`lat/lon = null`) | ⚠️ El error informado está **subestimado**. Pendiente calibrar (`calibrar_geo.py`) antes de confiar en el radio |
 | **Falsas alarmas** que gastan tiempo del equipo | 3.5 falsas alarmas por imagen con `n_final` (0.6 con COCO). En SITL, 2 personas inexistentes con el dron en tierra | Tracker con `min_hits` y `min_seen_sec: 2 s` antes de crear un waypoint; score visible en la tabla | Parcial. Se puede subir `tiling.conf` (hoy 0.25) y medir el efecto |
 | **Contar dos veces a la misma persona** | Sale de cuadro y vuelve; aproximadas que se repiten | Deduplicación por distancia y fusión de marcas (`persons.py`) | 2–3 duplicados por vuelo en SITL, también con la fusión de la versión actual (vuelo 4: 1). Las personas de la escena están a <15 m entre sí, lo que lo hace difícil de medir |
 
@@ -48,7 +48,7 @@ Ley 21.719). Este repo no evalúa el cumplimiento; hay que revisarlo antes de vo
 |---|---|---|
 | Que el sistema **comande al dron** por error o por un ataque | Regla de diseño: **ningún nodo publica en `/fmu/in/*`**. Solo se lee `/fmu/out/*` | ✅ Se cumple en todo el código |
 | Que alguien en el WiFi publique en ROS desde Foxglove | `jetson.yaml`: `foxglove_bridge` en solo lectura (`capabilities: [connectionGraph]`) | ✅ |
-| Web de rescate (`:8081`) **sin contraseña**: cualquiera en la red puede ver las coordenadas y agregar o borrar marcas manuales | `web_marks: false` apaga los botones; `web_port: 0` apaga la web | ⚠️ Por diseño, para operar sin configuración. La revisión de código encontró además que una página de **otro sitio** abierta en el mismo navegador puede mandar marcas (falta validar `Origin` y `Content-Type`), y que un `Content-Length` negativo puede colgar un hilo del servidor. **Pendiente de corregir** |
+| Web de rescate (`:8081`) **sin contraseña**: cualquiera en la red puede ver las coordenadas y agregar o borrar marcas manuales | `web_marks: false` apaga los botones; `web_port: 0` apaga la web | ⚠️ Sin contraseña por diseño, para operar sin configuración: hay que usar una red WiFi propia. Lo que encontró la revisión de código está **corregido** (2026-11-12, `web_map.py`, con tests en `test_web_map.py`): los POST exigen `Content-Type: application/json` y, si traen `Origin`, que sea el mismo host, así una página de **otro sitio** abierta en el mismo navegador no puede mandar marcas (CSRF); y un `Content-Length` negativo devuelve 400 en vez de colgar un hilo |
 | Secretos en el repo | No hay credenciales, tokens ni claves. `settings.json` de AirSim no tiene ninguno | ✅ Revisado |
 
 ## 5. Impacto
@@ -73,5 +73,8 @@ Revisadas en la fuente el 2026-11-10.
 | Cosys-AirSim | MIT (incluye los avisos de Microsoft AirSim, Codex Labs y Universidad de Amberes) | Solo se usa, no se redistribuye |
 | ROS 2 (Jazzy/Humble), foxglove_bridge | Apache-2.0 / MIT (no verificado en la fuente) | Solo se usan |
 
-El repo **no tiene licencia propia** (no hay `LICENSE`). Si se publica, la más simple y
-compatible con el uso de Ultralytics es **AGPL-3.0**. Lo decide el equipo.
+El repo **no tiene licencia propia** (no hay `LICENSE`), y `package.xml` y `setup.py`
+declaran **Apache-2.0**, que no es coherente con usar Ultralytics (AGPL-3.0). Si se
+publica, la más simple y compatible es **AGPL-3.0** (agregar `LICENSE` y cambiar las dos
+declaraciones). La otra opción es dejar Apache-2.0 para el código propio y aclarar en el
+README que, al usarlo con Ultralytics, el conjunto queda bajo AGPL-3.0. Lo decide el equipo.

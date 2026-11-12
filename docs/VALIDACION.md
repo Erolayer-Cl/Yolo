@@ -121,7 +121,10 @@ contaba 2 de 3 personas y 2 duplicados; ahora cuenta 3 de 3 y 1 duplicado. En lo
   ruido. `scripts/calibrar_geo.py` está hecho para medir ese error con un rosbag y la
   verdad de terreno. **Todavía no se corrió.** El vuelo 4 lo repite con el código
   actual: a ~25 m, error real de mediana 11.4 m contra ±2–4 m informados, y corrimiento
-  medio **+7.0 m al norte**, +4.7 m al este.
+  medio **+7.0 m al norte**, +4.7 m al este. Medido con la zona de búsqueda que dibuja
+  el mapa (2σ del error informado), la persona real queda dentro en 0 de 4 puntos
+  ubicados en el vuelo 4, y en 2 de 4 en los vuelos 1 y 3. Con un error bien calibrado
+  serían ~86 % (línea "zona de búsqueda" de cada `informe.txt`, agregada el 12-11).
 - **Falsas alarmas lejanas con coordenada** (vuelo 4): los puntos 1–3 quedaron a 145–257 m
   de toda persona, con error informado de ±4–12 m. Se marcaron a 108–228 m del dron, donde
   una persona mide pocos píxeles. Qué objeto confundió el detector no se revisó (no hubo

@@ -38,6 +38,8 @@ En qué se usó:
 | Entrenamiento (`training/`) | Scripts de preparación de datos, entrenamiento y evaluación. **El entrenamiento y la evaluación los ejecutó el equipo en su GPU**; las métricas salen de esas corridas |
 | Revisión de código | Revisión de la rama `entrenamiento-visdrone` (2026-11-10). Encontró, entre otros, el problema de la web descrito en [RIESGOS_Y_ETICA.md](RIESGOS_Y_ETICA.md) §4 |
 | Documentación | Redacción de README y `docs/` (2026-11-10), a partir de los resultados reales |
+| Correcciones de la revisión (2026-11-12) | Seguridad de la web, personas contadas dos veces, fix tardío que recreaba una persona fusionada, columna `id` de `personas.csv`, finales de línea (`.gitattributes`), con sus tests |
+| `entrega_eval01.zip` (material externo, 2026-11-12) | Paquete de documentación para EVAL-01 generado con IA **fuera de este repo**, sobre el `main` viejo. Se revisó y **no se aplicó**: duplicaba herramientas existentes y afirmaba cosas ya falsas (p. ej. "no se entrena"). Se rescataron, adaptadas y verificadas contra el código: el guion de demo, el plan B y las preguntas de [DEFENSA.md](DEFENSA.md), la métrica "dentro de 2σ" de `verdad_sitl.py` y el aviso de licencia y correo personal |
 
 ## Qué no hizo la IA
 
