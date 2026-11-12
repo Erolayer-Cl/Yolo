@@ -17,4 +17,5 @@ Resumen:
   ubicados a > 15 m de toda persona (falsa alarma o mal ubicados): 2
   aproximados lejos de toda persona (puntos sobre el dron, sin valor de rescate): 1
   error real de los ubicados: mediana 11.8 m, máx 14.8 m
+  persona real dentro de la zona de búsqueda (2σ del error informado): 2/4 (50 %; calibrado sería ~86 %)
   corrimiento medio de los ubicados: +9.1 m norte, +2.0 m este (si es grande frente a la mediana: sesgo)

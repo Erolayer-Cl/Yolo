@@ -155,11 +155,22 @@ def leer_puntos(vuelo):
             if not lat or not lon:
                 continue
             manual = r.get('manual') in ('1', 'True', 'true')
-            out.append({'id': r['id'], 'lat': float(lat), 'lon': float(lon),
+            # 'etiqueta' (1, M1...) desde el 12-11; antes la columna id ya era la etiqueta.
+            out.append({'id': r.get('etiqueta') or r['id'], 'lat': float(lat), 'lon': float(lon),
                         't': r.get('t') or None,
                         'ubicada': ubicada, 'manual': manual,
                         'error_m': float(r['error_m']) if ubicada and r['error_m'] else None})
         return out
+
+
+def dentro_de_2sigma(filas):
+    """(dentro, total): de los puntos ubicados del detector con error informado y no
+    lejos de toda persona, cuántos tienen a su persona real dentro de 2·error_m, el
+    anillo que dibuja el mapa como zona de búsqueda. Con un error 1σ bien calibrado
+    (gaussiano 2D) daría ~86 %; mucho menos = el sistema dice más precisión de la que tiene."""
+    utiles = [r for r in filas if r['ubicada'] and not r['manual']
+              and r['error_m'] is not None and r['err_real'] <= FALSA_ALARMA_M]
+    return sum(1 for r in utiles if r['err_real'] <= 2 * r['error_m']), len(utiles)
 
 
 def informe(verdad, filas):
@@ -205,6 +216,10 @@ def informe(verdad, filas):
     if ubic:
         print(f'  error real de los ubicados: mediana {ubic[len(ubic) // 2]:.1f} m, '
               f'máx {ubic[-1]:.1f} m')
+    dentro, total = dentro_de_2sigma(filas)
+    if total:
+        print(f'  persona real dentro de la zona de búsqueda (2σ del error informado): '
+              f'{dentro}/{total} ({100 * dentro / total:.0f} %; calibrado sería ~86 %)')
     # Sesgo: si todos se corren para el mismo lado es un error sistemático
     # (pitch de la cámara, retraso), no ruido.
     if len(ubic) >= 3:

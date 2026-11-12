@@ -1,4 +1,5 @@
 import json
+import socket
 import urllib.error
 import urllib.request
 
@@ -118,6 +119,51 @@ def test_post_disabled_without_callback(server):
     with pytest.raises(urllib.error.HTTPError) as exc:
         post(server, '/api/mark')
     assert exc.value.code == 404
+
+
+@pytest.fixture
+def post_server():
+    calls = []
+    s = MapServer(0, '127.0.0.1', on_post=lambda p, d: (calls.append(p), (200, {'ok': True}))[1])
+    s.calls = calls
+    yield s
+    s.stop()
+
+
+def raw_post(server, headers, body=b'{}'):
+    """POST con cabeceras a mano (urllib no deja mandar algunas). Devuelve el código."""
+    lines = ['POST /api/mark HTTP/1.1', f'Host: 127.0.0.1:{server.port}', 'Connection: close']
+    lines += [f'{k}: {v}' for k, v in headers.items()]
+    with socket.create_connection(('127.0.0.1', server.port), timeout=5) as sock:
+        sock.sendall(('\r\n'.join(lines) + '\r\n\r\n').encode() + body)
+        status = sock.makefile('rb').readline()
+    return int(status.split()[1])
+
+
+def test_post_negative_content_length_is_400_not_hang(post_server):
+    code = raw_post(post_server, {'Content-Type': 'application/json',
+                                  'Content-Length': '-1'})
+    assert code == 400 and post_server.calls == []
+
+
+def test_post_requires_json_content_type(post_server):
+    # Un <form> de otra página solo puede mandar estos tipos: no tiene que pasar.
+    for ctype in ('application/x-www-form-urlencoded', 'text/plain', 'multipart/form-data'):
+        assert raw_post(post_server, {'Content-Type': ctype, 'Content-Length': '2'}) == 415
+    assert raw_post(post_server, {'Content-Length': '2'}) == 415
+    assert post_server.calls == []
+
+
+def test_post_from_other_origin_is_403(post_server):
+    base = {'Content-Type': 'application/json', 'Content-Length': '2'}
+    for origin in ('http://evil.example', 'null', f'http://127.0.0.1:{post_server.port + 1}'):
+        assert raw_post(post_server, {**base, 'Origin': origin}) == 403
+    assert post_server.calls == []
+    # La propia página (mismo host:puerto) sí, y sin Origin (curl) también.
+    ok = {**base, 'Origin': f'http://127.0.0.1:{post_server.port}'}
+    assert raw_post(post_server, ok) == 200
+    assert raw_post(post_server, {**base, 'Content-Type': 'application/json; charset=utf-8'}) == 200
+    assert post_server.calls == ['/api/mark', '/api/mark']
 
 
 def test_page_has_mark_button(server):

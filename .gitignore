@@ -10,6 +10,9 @@ models/*
 *.engine
 *.onnx
 
+# Configuración local del editor (rutas propias de cada máquina)
+.vscode/
+
 # Notas locales de Claude Code
 CLAUDE.md
 

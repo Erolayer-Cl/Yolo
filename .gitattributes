@@ -1,0 +1,19 @@
+# Scripts y código siempre con LF, aunque se haga commit/checkout desde el git de
+# Windows (core.autocrlf=true): un .sh con CRLF falla con "$'\r': command not found".
+*.sh        text eol=lf
+*.py        text eol=lf
+*.bash      text eol=lf
+Makefile    text eol=lf
+*.yaml      text eol=lf
+*.launch.py text eol=lf
+*.msg       text eol=lf
+*.srv       text eol=lf
+
+# Pesos y binarios: nunca convertir.
+*.pt        binary
+*.engine    binary
+*.onnx      binary
+*.pdf       binary
+*.png       binary
+*.jpg       binary
+*.mp4       binary

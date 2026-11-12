@@ -38,7 +38,10 @@ person_detector:
     counting:
       min_hits: 3
       max_age_sec: 1.5
-      max_missed: 3              # en frames con tiles; inferencia lenta no recuenta a quien se sigue viendo
+      # Inferencias seguidas, con o sin tiles: con every_n_frames 2, una persona
+      # lejana que solo sale en tiles cuenta como faltante en los frames sin tiles.
+      # (Se borra solo si además pasó max_age_sec: la inferencia lenta no recuenta.)
+      max_missed: 3
       iou_thr: 0.2
       dist_thr: 1.5              # a 8 Hz la persona se corre más entre frames
       min_seen_sec: 2.0          # waypoint tras seguirla esto (persons.py)

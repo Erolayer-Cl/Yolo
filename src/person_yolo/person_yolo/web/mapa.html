@@ -653,7 +653,6 @@ async function postJSON(url, body) {
 }
 const gpsOk = () => live && live.lat != null && live.age_s != null && live.age_s <= 3;
 let markPending = false;
-const markBusy = () => markPending;
 async function markHere() {
   const b = $('bMark');
   if (b.disabled || markPending) return;
@@ -713,7 +712,7 @@ function onLive() {
     const hdg = live.heading_deg != null ? ` · rumbo ${deg3(live.heading_deg)}` : '';
     d.textContent = `Dron: ${live.lat.toFixed(6)}, ${live.lon.toFixed(6)}${alt}${hdg}`;
   }
-  if (!markBusy()) $('bMark').disabled = !gpsOk();
+  if (!markPending) $('bMark').disabled = !gpsOk();
   renderStats();
   requestDraw();
 }

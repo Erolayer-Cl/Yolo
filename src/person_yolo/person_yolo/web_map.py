@@ -80,8 +80,22 @@ class MapServer:
                 if on_post is None or not path.startswith('/api/'):
                     self._json(404, {'error': 'no existe'})
                     return
+                # CSRF: otra página abierta en el mismo navegador (de internet) no
+                # puede marcar ni borrar. Un <form> no puede mandar application/json,
+                # y un fetch con ese tipo desde otro origen exige un preflight CORS que
+                # este servidor no responde. Si viene Origin, tiene que ser este host.
+                ctype = (self.headers.get('Content-Type') or '').split(';')[0].strip()
+                if ctype.lower() != 'application/json':
+                    self._json(415, {'error': 'se esperaba Content-Type: application/json'})
+                    return
+                origin = self.headers.get('Origin')
+                if origin is not None and urlparse(origin).netloc != self.headers.get('Host'):
+                    self._json(403, {'error': 'origen no permitido'})
+                    return
                 try:
                     n = int(self.headers.get('Content-Length') or 0)
+                    if n < 0:                   # rfile.read(-1) leería hasta que se cierre
+                        raise ValueError('Content-Length inválido')
                     if n > 4096:
                         raise ValueError('demasiado grande')
                     raw = self.rfile.read(n) if n else b''

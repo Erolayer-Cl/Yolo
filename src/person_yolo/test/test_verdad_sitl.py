@@ -37,6 +37,18 @@ def test_mas_puntos_juntos_que_personas():
     assert filas[3]['real'] == 'C'
 
 
+def test_dentro_de_2sigma_cuenta_solo_ubicados_del_detector():
+    def fila(err_real, error_m=2.0, ubicada=True, manual=False):
+        return {'ubicada': ubicada, 'manual': manual, 'error_m': error_m, 'err_real': err_real}
+    filas = [fila(1.0), fila(3.9), fila(4.1),            # 2σ = 4 m: 2 dentro, 1 fuera
+             fila(1.0, manual=True),                     # marca manual: no cuenta
+             fila(1.0, error_m=None, ubicada=False),     # aproximada: no cuenta
+             fila(1.0, error_m=None),                    # sin error informado: no cuenta
+             fila(verdad_sitl.FALSA_ALARMA_M + 1)]       # falsa alarma: no cuenta
+    assert verdad_sitl.dentro_de_2sigma(filas) == (2, 3)
+    assert verdad_sitl.dentro_de_2sigma([]) == (0, 0)
+
+
 def test_marcas_manuales_no_se_agrupan():
     filas = verdad_sitl.comparar(VERDAD, [_pt('1', 10, 't0'), _pt('M1', 10, 't0', True)])
     assert [f['real'] for f in filas] == ['B', 'B']

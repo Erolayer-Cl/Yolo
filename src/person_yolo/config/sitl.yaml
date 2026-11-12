@@ -40,7 +40,7 @@ person_detector:
       # AirSim da pocos Hz (1-5): con 1.5 s / 3 frames una persona lejana que
       # parpadea se olvidaba y se volvía a contar en cada tanda.
       max_age_sec: 3.0           # sin verlo más que esto...
-      max_missed: 6              # ...y en 6 frames CON tiles seguidos -> si vuelve, cuenta de nuevo
+      max_missed: 6              # ...y en 6 inferencias seguidas (con o sin tiles) -> si vuelve, cuenta de nuevo
       iou_thr: 0.2
       dist_thr: 1.0              # salto máx. del centro, en diagonales de la caja
       # Waypoint (persons.py): se pone tras seguir a la persona min_seen_sec, con

@@ -22,7 +22,8 @@ es un waypoint:
      combinados si es mayor) de una persona ya marcada que NO se está viendo en
      este frame, es la misma que salió de cuadro y volvió: evento 'duplicate'.
      Aproximadas (sin posición propia): se comparan por la posición del DRON
-     (`approx_radius_m`).
+     (`approx_radius_m`), también cuando la nueva sí tiene posición: es la
+     aproximada que ahora se pudo ubicar, y pasa a tener esa posición (fix).
   4. Duplicados después: si al mejorar su posición dos personas marcadas quedan
      a menos de ese radio, y NUNCA se vieron en el mismo frame, son la misma:
      se fusionan en la más vieja y la otra se borra (evento 'merge').
@@ -277,8 +278,11 @@ class PersonRegistry:
         if located:
             lat, lon = pend.fusion.position()
             o = replace(o, lat=lat, lon=lon, error_m=self._err(pend.fusion))
-        dup = (self._nearest_unseen(o, seen_now, pend.fusion.best) if located
-               else self._nearest_unseen_approx(o, seen_now))
+        dup = self._nearest_unseen(o, seen_now, pend.fusion.best) if located else None
+        if dup is None:
+            # También una ubicada contra una aproximada ya marcada con el dron cerca:
+            # es la misma, que ahora sí se pudo ubicar (si no, se contaba dos veces).
+            dup = self._nearest_unseen_approx(o, seen_now)
         if dup is not None:
             self.track_person[tid] = dup.id
             dup.last = now
@@ -356,9 +360,11 @@ class PersonRegistry:
         for tid, pid in self.track_person.items():
             if pid == drop.id:
                 self.track_person[tid] = keep.id
-        # Lo que no se podía fusionar con `drop` tampoco con `keep`.
+        # Lo que no se podía fusionar con `drop` tampoco con `keep`. Los pares de
+        # `drop` se sacan: si no, `together` acumula ids que ya no existen.
         for x, y in list(self.together):
             if drop.id in (x, y):
+                self.together.discard((x, y))
                 other = y if x == drop.id else x
                 if other != keep.id:
                     self.together.add((min(other, keep.id), max(other, keep.id)))

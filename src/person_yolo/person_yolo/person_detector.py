@@ -545,8 +545,7 @@ class PersonDetector(Node):
         # Estado del dron cuando se sacó la imagen (no cuando termine la inferencia).
         img_t = _stamp_s(msg)
         self._snap = self._state_at(img_t - self.image_delay)
-        self._lag_sum += self.get_clock().now().nanoseconds * 1e-9 - img_t
-        self._synced_n += int(self._snap['synced'])
+        lag = self.get_clock().now().nanoseconds * 1e-9 - img_t
 
         try:
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -554,6 +553,10 @@ class PersonDetector(Node):
             self.get_logger().error(f'No se pudo convertir la imagen: {exc}',
                                     throttle_duration_sec=5.0)
             return
+        # Después de convertir: se promedian sobre _frames_done, que no cuenta
+        # los frames que fallaron arriba.
+        self._lag_sum += lag
+        self._synced_n += int(self._snap['synced'])
 
         boxes, src, tiles = self._infer(frame)
         self._frame_idx += 1
@@ -564,8 +567,7 @@ class PersonDetector(Node):
         tracks = self.counter.update(boxes, time.monotonic())
 
         where = self._where()
-        stamp = msg.header.stamp
-        stamp_t = round(stamp.sec + stamp.nanosec * 1e-9, 3)
+        stamp_t = round(img_t, 3)
         obs = self._observations(boxes, tracks, where, frame.shape[1], frame.shape[0])
         self._publish_person_events(self.registry.update(time.monotonic(), stamp_t, obs),
                                     stamp_t)

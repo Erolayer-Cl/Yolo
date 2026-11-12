@@ -112,7 +112,7 @@ class TrailNode(Node):
         self.create_subscription(NavSatFix, '/drone/gps', self._on_gps, 10)
         self.create_subscription(PoseStamped, '/drone/pose', self._on_pose, 10)
         self.create_subscription(String, '/yolo/person_alert', self._on_alert, 50)
-        self.create_subscription(String, '/yolo/person_fix', self._on_alert, 50)
+        self.create_subscription(String, '/yolo/person_fix', self._on_fix, 50)
         self.create_subscription(String, '/yolo/person_merge', self._on_merge, 50)
         self.create_subscription(Int32, '/yolo/person_count', self._on_count, 10)
         self.create_service(Trigger, '/drone/trail/reset', self._on_reset)
@@ -170,6 +170,12 @@ class TrailNode(Node):
         self._in_view = (int(msg.data), time.monotonic())
 
     def _on_alert(self, msg: String):
+        self._add_spot(msg, fix=False)
+
+    def _on_fix(self, msg: String):
+        self._add_spot(msg, fix=True)
+
+    def _add_spot(self, msg: String, fix: bool):
         try:
             al = json.loads(msg.data)
         except ValueError:
@@ -180,7 +186,9 @@ class TrailNode(Node):
                                    f'mapa ({msg.data[:120]})')
             return
         self.trail.add_person(spot)
-        self.get_logger().info(f'Persona #{spot.id}: {spot.coords_text()}')
+        # Un fix llega hasta 1 vez/s por persona: a INFO taparía las alertas.
+        log = self.get_logger().debug if fix else self.get_logger().info
+        log(f'Persona #{spot.id}{" (mejor posición)" if fix else ""}: {spot.coords_text()}')
         self._web_state()                     # en la web, sin esperar al próximo tick
 
     def _on_merge(self, msg: String):
@@ -201,7 +209,9 @@ class TrailNode(Node):
             if fix is None or time.monotonic() - fix[4] > 3.0:
                 return 409, {'error': 'sin GPS del dron: no se puede marcar'}
             lat, lon = fix[0], fix[1]
-            self._web_queue.put(('add', time.time(), lat, lon))
+            # Reloj ROS, como el `t` de las personas del detector (stamp de la imagen).
+            t = self.get_clock().now().nanoseconds * 1e-9
+            self._web_queue.put(('add', t, lat, lon))
             return 200, {'ok': True, 'lat': round(lat, 8), 'lon': round(lon, 8)}
         if path == '/api/mark/delete':
             try:
@@ -280,12 +290,15 @@ class TrailNode(Node):
     def save(self):
         if not self.trail.dirty or not self.trail.points:
             return
-        if self.flight_dir is None:
-            name = datetime.now().strftime('%Y%m%d_%H%M%S')
-            self.flight_dir = os.path.join(self.output_root, name)
-            os.makedirs(self.flight_dir, exist_ok=True)
-            self.get_logger().info(f'Guardando recorrido en {self.flight_dir}/')
         try:
+            # Dentro del try: sin permisos o con el disco lleno se avisa y se
+            # reintenta en el próximo guardado (también en el último, al cerrar).
+            if self.flight_dir is None:
+                name = datetime.now().strftime('%Y%m%d_%H%M%S')
+                d = os.path.join(self.output_root, name)
+                os.makedirs(d, exist_ok=True)
+                self.flight_dir = d
+                self.get_logger().info(f'Guardando recorrido en {self.flight_dir}/')
             d = self.flight_dir
             _write_atomic(os.path.join(d, 'trail.geojson'),
                           json.dumps(self.trail.to_geojson(), indent=1))

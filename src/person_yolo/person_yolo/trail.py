@@ -134,6 +134,9 @@ class Trail:
     total_m: float = 0.0
     dirty: bool = False
     marks_n: int = 0                # marcas manuales creadas (no se reutilizan)
+    # (id, t) de personas borradas por un merge: un fix que llega tarde (ya estaba
+    # en la cola de ROS) no tiene que volver a crearlas.
+    removed: set = field(default_factory=set)
 
     def add(self, p: TrailPoint) -> bool:
         """Agrega `p` si se alejó >= min_step_m (3D) del último. True si entró."""
@@ -166,7 +169,10 @@ class Trail:
         """Registra una persona distinta, o le mejora la posición si ya está
         (mismo id y misma `t`, la de su primera alerta: si el detector se reinicia,
         un id repetido es otra persona). No se fusiona nada más: dos personas
-        juntas tienen que quedar como dos puntos."""
+        juntas tienen que quedar como dos puntos. Una persona ya borrada por un
+        merge no se vuelve a crear."""
+        if (spot.id, round(spot.t, 3)) in self.removed:
+            return
         for i, p in enumerate(self.persons):
             if p.id == spot.id and abs(p.t - spot.t) < 1e-3:
                 if spot.located or not p.located:
@@ -178,7 +184,9 @@ class Trail:
 
     def remove_person(self, pid: int, t: float) -> bool:
         """Borra la persona (id, t): el detector se dio cuenta de que era otra ya
-        marcada (/yolo/person_merge). True si estaba."""
+        marcada (/yolo/person_merge). True si estaba. Queda recordada: no se
+        vuelve a crear aunque llegue después un fix suyo."""
+        self.removed.add((pid, round(t, 3)))
         n = len(self.persons)
         self.persons = [p for p in self.persons
                         if p.manual or not (p.id == pid and abs(p.t - t) < 1e-3)]
@@ -385,11 +393,13 @@ class Trail:
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(['id', 't', 'lat', 'lon', 'ubicada', 'error_m', 'score',
-                    'drone_lat', 'drone_lon', 'manual'])
+                    'drone_lat', 'drone_lon', 'manual', 'etiqueta'])
         for p in self.persons:
-            w.writerow([p.label, f'{p.t:.3f}', f'{p.lat:.8f}', f'{p.lon:.8f}',
+            # id: siempre el número (negativo en las marcas manuales); la etiqueta
+            # que se ve en el mapa (1, 2, M1...) va al final, sin correr columnas.
+            w.writerow([p.id, f'{p.t:.3f}', f'{p.lat:.8f}', f'{p.lon:.8f}',
                         int(p.located), _fmt(p.error_m), f'{p.score:.3f}',
-                        f'{p.drone_lat:.8f}', f'{p.drone_lon:.8f}', int(p.manual)])
+                        f'{p.drone_lat:.8f}', f'{p.drone_lon:.8f}', int(p.manual), p.label])
         return buf.getvalue()
 
     def geojson_str(self, grid_step_m=0.0) -> str:

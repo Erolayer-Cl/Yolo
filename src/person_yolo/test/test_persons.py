@@ -167,6 +167,25 @@ def test_approx_never_merges_with_a_located_person():
     assert kinds(ev) == ['alert', 'alert']
 
 
+def test_approx_then_located_with_drone_near_is_the_same_person():
+    # Marcada aproximada (lejos, sin posición); después, con otro track, se la
+    # ubica desde el mismo lugar: es la misma, ahora con posición. No cuenta dos.
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=10.0)
+    loc = Observation(2, LAT0 + 30.0 / M_PER_DEG, LON0, 2.0,
+                      drone_lat=LAT0 + 2.0 / M_PER_DEG, drone_lon=LON0)
+    ev = run(reg, [[approx(1, 0.0)]] * 15 + [[]] * 20 + [[loc]] * 15)
+    assert kinds(ev) == ['alert', 'duplicate', 'fix'] and reg.total == 1
+    assert reg.person_id(2) == 1 and ev[-1].obs.located
+    assert abs(north_of(ev[-1].obs) - 30.0) < 0.5
+
+
+def test_approx_then_located_with_drone_far_is_new():
+    reg = PersonRegistry(min_seen_sec=1.0, max_wait_sec=1.0, approx_radius_m=10.0)
+    loc = Observation(2, LAT0, LON0, 2.0, drone_lat=LAT0 + 40.0 / M_PER_DEG, drone_lon=LON0)
+    ev = run(reg, [[approx(1, 0.0)]] * 15 + [[]] * 20 + [[loc]] * 15)
+    assert kinds(ev) == ['alert', 'alert'] and reg.total == 2
+
+
 def located(tid, north_m, east_m=0.0, err=2.0):
     return Observation(tid, LAT0 + north_m / M_PER_DEG,
                        LON0 + east_m / (M_PER_DEG * math.cos(math.radians(LAT0))), err)
@@ -207,6 +226,16 @@ def test_two_marks_that_converge_are_merged_live():
     m = next(e for e in ev if e.kind == 'merge')
     assert m.person_id == 1 and m.removed[0] == 2
     assert reg.person_id(2) == 1                       # el track sigue, con el id viejo
+
+
+def test_merge_drops_pairs_of_removed_person():
+    # 3 se ve junto con 2; 2 se fusiona en 1: el par (2, 3) pasa a (1, 3) y no queda.
+    reg = PersonRegistry(min_seen_sec=1.0, dedupe_radius_m=4.0, fix_period_sec=0.0)
+    run(reg, [[located(1, 10.0, err=1.0)]] * 15 + [[]] * 25
+        + [[located(2, 25.0, err=1.0), located(3, 60.0, err=1.0)]] * 15
+        + [[located(2, 12.0, err=1.0), located(3, 60.0, err=1.0)]] * 60)
+    assert set(reg.persons) == {1, 3}
+    assert all(2 not in pair for pair in reg.together) and (1, 3) in reg.together
 
 
 def test_people_seen_together_are_never_merged_later():
