@@ -1,0 +1,82 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6565824904259,
+     -33.467062683336835
+    ]
+   },
+   "properties": {
+    "name": "StaticMeshActor_1",
+    "marker-color": "#2e7d32",
+    "tipo": "real"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65651241481667,
+     -33.46697454991374
+    ]
+   },
+   "properties": {
+    "name": "StaticMeshActor_3",
+    "marker-color": "#2e7d32",
+    "tipo": "real"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65661483301479,
+     -33.46700962335304
+    ]
+   },
+   "properties": {
+    "name": "StaticMeshActor_4",
+    "marker-color": "#2e7d32",
+    "tipo": "real"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6580373,
+     -33.4692242
+    ]
+   },
+   "properties": {
+    "name": "#1",
+    "error_real_m": 275.6,
+    "marker-color": "#ef6c00",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6580373,
+     -33.4692242
+    ]
+   },
+   "properties": {
+    "name": "#2",
+    "error_real_m": 275.6,
+    "marker-color": "#ef6c00",
+    "tipo": "detectada"
+   }
+  }
+ ]
+}

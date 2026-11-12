@@ -19,7 +19,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='matias',
-    maintainer_email='ibanezignacio2005@gmail.com',
+    maintainer_email='equipo@example.com',
     description='Deteccion de personas con YOLO + GPS + recorrido del dron.',
     license='Apache-2.0',
     entry_points={

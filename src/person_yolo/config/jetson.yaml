@@ -38,12 +38,17 @@ person_detector:
     counting:
       min_hits: 3
       max_age_sec: 1.5
-      max_missed: 3              # en frames con tiles; inferencia lenta no recuenta a quien se sigue viendo
+      # Inferencias seguidas, con o sin tiles: con every_n_frames 2, una persona
+      # lejana que solo sale en tiles cuenta como faltante en los frames sin tiles.
+      # (Se borra solo si además pasó max_age_sec: la inferencia lenta no recuenta.)
+      max_missed: 3
       iou_thr: 0.2
       dist_thr: 1.5              # a 8 Hz la persona se corre más entre frames
       min_seen_sec: 2.0          # waypoint tras seguirla esto (persons.py)
       max_wait_sec: 6.0
       dedupe_radius_m: 4.0
+      dedupe_approx_radius_m: 10.0   # aproximadas: por la posición del dron; 0 = apagado
+      max_error_m: 8.0               # esperar (hasta max_wait_sec) una posición así de buena
 
     annotated_scale: 0.5         # 960x540 por WiFi
     jpeg_quality: 60
@@ -100,6 +105,9 @@ trail_node:
     save_period_sec: 10.0
     grid_step_m: 50.0            # grilla del mapa centrada en home; 0 = sin grilla
     web_port: 8081               # desde tierra: http://<ip-jetson>:8081 (sin contraseña)
+    # Botón "Marcar aquí": cualquiera en el WiFi puede agregar/borrar marcas manuales
+    # (no las del detector, y no comanda al dron). false si no se usa.
+    web_marks: true
 
 foxglove_bridge:
   ros__parameters:

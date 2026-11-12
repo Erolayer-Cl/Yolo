@@ -1,0 +1,274 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65658493901024,
+     -33.467057716540836
+    ]
+   },
+   "properties": {
+    "name": "StaticMeshActor_1",
+    "marker-color": "#2e7d32",
+    "tipo": "real"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65651486503222,
+     -33.466969583117745
+    ]
+   },
+   "properties": {
+    "name": "StaticMeshActor_3",
+    "marker-color": "#2e7d32",
+    "tipo": "real"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65661728084625,
+     -33.46700465655704
+    ]
+   },
+   "properties": {
+    "name": "StaticMeshActor_4",
+    "marker-color": "#2e7d32",
+    "tipo": "real"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65780207,
+     -33.46913382
+    ]
+   },
+   "properties": {
+    "name": "#1",
+    "error_real_m": 257.0,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6582034,
+     -33.4687649
+    ]
+   },
+   "properties": {
+    "name": "#2",
+    "error_real_m": 242.0,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65782311,
+     -33.46785334
+    ]
+   },
+   "properties": {
+    "name": "#3",
+    "error_real_m": 145.0,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65709041,
+     -33.46692361
+    ]
+   },
+   "properties": {
+    "name": "#4",
+    "error_real_m": 44.8,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65641693,
+     -33.46690825
+    ]
+   },
+   "properties": {
+    "name": "#5",
+    "error_real_m": 11.4,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65652307,
+     -33.46703472
+    ]
+   },
+   "properties": {
+    "name": "#6",
+    "error_real_m": 6.3,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65655174,
+     -33.4669667
+    ]
+   },
+   "properties": {
+    "name": "#7",
+    "error_real_m": 3.4,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6565358,
+     -33.46683971
+    ]
+   },
+   "properties": {
+    "name": "#8",
+    "error_real_m": 14.6,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.65650004,
+     -33.46738612
+    ]
+   },
+   "properties": {
+    "name": "#9",
+    "error_real_m": 37.4,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6569489,
+     -33.4672072
+    ]
+   },
+   "properties": {
+    "name": "#M1",
+    "error_real_m": 37.6,
+    "marker-color": "#d32f2f",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6569578,
+     -33.4672102
+    ]
+   },
+   "properties": {
+    "name": "#10",
+    "error_real_m": 38.5,
+    "marker-color": "#ef6c00",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6569578,
+     -33.4672102
+    ]
+   },
+   "properties": {
+    "name": "#11",
+    "error_real_m": 38.5,
+    "marker-color": "#ef6c00",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.656958,
+     -33.46721
+    ]
+   },
+   "properties": {
+    "name": "#12",
+    "error_real_m": 38.5,
+    "marker-color": "#ef6c00",
+    "tipo": "detectada"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -70.6569603,
+     -33.467209
+    ]
+   },
+   "properties": {
+    "name": "#13",
+    "error_real_m": 38.7,
+    "marker-color": "#ef6c00",
+    "tipo": "detectada"
+   }
+  }
+ ]
+}

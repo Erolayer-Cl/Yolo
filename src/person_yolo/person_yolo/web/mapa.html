@@ -17,6 +17,7 @@
     --map: #eceff3; --grid: rgba(60, 72, 92, .16); --grid-axis: rgba(60, 72, 92, .45);
     --map-panel: #ffffff; --map-text: #1c2330; --map-muted: #657084; --map-sel: #111827;
     --person: #d33427; --approx: #e07a10; --home: #1b8a3c; --trail: #3b7ddd; --drone: #6d3fd8;
+    --manual: #1f5fe0; --manual-t: #6ea2ff;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
@@ -86,6 +87,16 @@
   @keyframes flash { 50% { background: color-mix(in srgb, var(--person) 22%, transparent); } }
   .badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; color: #fff; }
   .badge.ubic { background: var(--person); } .badge.aprox { background: var(--approx); }
+  .badge.manual { background: var(--manual); }
+  #bMark { height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--manual);
+           background: var(--manual); color: #fff; font: 700 14px system-ui, sans-serif;
+           cursor: pointer; }
+  #bMark:disabled { opacity: .45; cursor: not-allowed; }
+  #toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+           max-width: 90%; padding: 8px 14px; border-radius: 8px; font-weight: 600;
+           background: var(--panel); color: var(--text); border: 1px solid var(--line);
+           box-shadow: 0 4px 16px rgba(0,0,0,.35); display: none; }
+  #toast.bad { border-color: var(--bad); color: #ffb4b0; }
   td button { font: 600 12px system-ui, sans-serif; padding: 3px 8px; border-radius: 6px;
               border: 1px solid var(--line); background: var(--panel); color: var(--text);
               cursor: pointer; }
@@ -108,6 +119,7 @@
   <h1>Mapa de rescate</h1>
   <span id="status">Conectando…</span>
   <span id="drone">Dron: sin datos</span>
+  <button id="bMark" disabled title="Agregar una marca en la posición del dron AHORA (tecla M). Solo marca el mapa: no mueve el dron.">Marcar aquí</button>
 </header>
 <section class="stats" aria-label="Conteo de personas">
   <div class="stat total"><div class="v" id="nTotal">0</div><div class="k">Personas vistas</div></div>
@@ -120,6 +132,7 @@
     <canvas id="map" aria-label="Mapa GPS con el recorrido del dron y las personas encontradas"></canvas>
     <div id="note"></div>
     <div id="cursor"></div>
+    <div id="toast" role="status"></div>
     <div class="tools">
       <button id="bFollow" class="on" title="Centrar el mapa en el dron">Seguir dron</button>
       <button id="bFit" title="Ver todo el recorrido y las personas">Ver todo</button>
@@ -265,6 +278,7 @@ function drawPersons() {
   for (const p of state.persons) {
     if (!p.pos) continue;
     const [x, y] = toScreen(p.pos[0], p.pos[1]);
+    if (p.manual) { drawMark(p, x, y, now); continue; }
     const color = p.ubicada ? css('--person') : css('--approx');
     if (p.ubicada && p.error_m) {                     // zona de búsqueda: 2 sigma
       const r = 2 * p.error_m * view.s;
@@ -297,6 +311,27 @@ function drawPersons() {
     const label = '#' + p.id + (p.ubicada ? '' : ' ?');
     ctx.strokeText(label, x + 10, y - 8); ctx.fillStyle = color; ctx.fillText(label, x + 10, y - 8);
   }
+}
+
+// Marca manual: rombo azul con su etiqueta (M1, M2...).
+function drawMark(p, x, y, now) {
+  const color = css('--manual');
+  const t0 = fresh.get(p.id);
+  if (t0 !== undefined) {
+    const k = ((now - t0) % 1200) / 1200;
+    ctx.strokeStyle = color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, y, 8 + 22 * k, 0, 2 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  if (p.id === selected) {
+    ctx.strokeStyle = css('--map-sel'); ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, 14, 0, 2 * Math.PI); ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(x, y - 9); ctx.lineTo(x + 9, y); ctx.lineTo(x, y + 9); ctx.lineTo(x - 9, y); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+  ctx.font = '700 12px system-ui'; ctx.textAlign = 'left';
+  ctx.lineWidth = 3; ctx.strokeStyle = css('--map');
+  ctx.strokeText(p.etiqueta, x + 11, y - 8); ctx.fillStyle = color; ctx.fillText(p.etiqueta, x + 11, y - 8);
 }
 
 function drawDrone() {
@@ -513,7 +548,9 @@ function fallbackCopy(text) {
   return ok;
 }
 
-const sortedPersons = () => (state ? [...state.persons].sort((a, b) => a.id - b.id) : []);
+// Detectadas por id y después las marcas manuales (M1, M2...: id -1, -2...).
+const sortedPersons = () => (state ? [...state.persons].sort((a, b) =>
+  (a.manual - b.manual) || (a.manual ? b.id - a.id : a.id - b.id)) : []);
 const hora = t => new Date(t * 1000).toLocaleTimeString();
 
 function toDrone(p) {
@@ -524,7 +561,7 @@ function toDrone(p) {
 }
 
 function renderStats() {
-  const persons = state ? state.persons : [];
+  const persons = state ? state.persons.filter(p => !p.manual) : [];   // las del detector
   const ubic = persons.filter(p => p.ubicada).length;
   $('nTotal').textContent = persons.length;
   $('nUbic').textContent = ubic;
@@ -541,6 +578,15 @@ function renderRows() {
   } else {
     html = persons.map(p => {
       const cls = [p.id === selected ? 'sel' : '', fresh.has(p.id) ? 'new' : ''].join(' ');
+      if (p.manual) {
+        const coords = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
+        return `<tr class="${cls}" data-id="${p.id}" title="Marca manual: posición del dron cuando se apretó Marcar aquí.">
+          <td><b>${esc(p.etiqueta)}</b></td><td><span class="badge manual">Manual</span></td>
+          <td class="mono">${p.lat.toFixed(6)}</td><td class="mono">${p.lon.toFixed(6)}</td>
+          <td class="muted">dron</td><td>${esc(toDrone(p))}</td><td class="muted">${esc(hora(p.t))}</td>
+          <td><button data-copy="${coords}" title="Copiar latitud, longitud">Copiar</button>
+              <button data-del="${p.id}" title="Borrar esta marca manual">Borrar</button></td></tr>`;
+      }
       if (!p.ubicada) {
         return `<tr class="${cls}" data-id="${p.id}" title="Sin coordenadas de la persona: se marcó donde estaba el dron (${p.drone_lat.toFixed(6)}, ${p.drone_lon.toFixed(6)}). Volver a pasar sobre esa zona.">
           <td><b>${p.id}</b></td><td><span class="badge aprox">Aprox.</span></td>
@@ -565,6 +611,10 @@ function renderRows() {
 function tableText() {
   const lines = ['#\testado\tlatitud\tlongitud\terror_m\thora'];
   for (const p of sortedPersons()) {
+    if (p.manual) {
+      lines.push(`${p.etiqueta}\tmanual (dron)\t${p.lat.toFixed(6)}\t${p.lon.toFixed(6)}\t\t${hora(p.t)}`);
+      continue;
+    }
     lines.push(p.ubicada
       ? `${p.id}\tGPS\t${p.lat.toFixed(6)}\t${p.lon.toFixed(6)}\t${p.error_m ?? ''}\t${hora(p.t)}`
       : `${p.id}\taproximada (dron)\t${p.drone_lat.toFixed(6)}\t${p.drone_lon.toFixed(6)}\t\t${hora(p.t)}`);
@@ -576,11 +626,57 @@ $('bCopyAll').onclick = ev => copyText(tableText(), ev.currentTarget);
 $('rows').addEventListener('click', ev => {
   const btn = ev.target.closest('button[data-copy]');
   if (btn) { ev.stopPropagation(); copyText(btn.dataset.copy, btn); return; }
+  const del = ev.target.closest('button[data-del]');
+  if (del) { ev.stopPropagation(); deleteMark(+del.dataset.del); return; }
   const tr = ev.target.closest('tr[data-id]');
   if (!tr) return;
   const p = state.persons.find(q => q.id === +tr.dataset.id);
   select(p.id, false);
   centerOn(p);
+});
+
+// ---------------------------------------------------------------- marcas manuales
+let toastTimer = null;
+function toast(text, bad) {
+  const t = $('toast');
+  t.textContent = text; t.className = bad ? 'bad' : ''; t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+}
+async function postJSON(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                               body: JSON.stringify(body || {}) });
+  let out = {};
+  try { out = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(out.error || ('error ' + r.status));
+  return out;
+}
+const gpsOk = () => live && live.lat != null && live.age_s != null && live.age_s <= 3;
+let markPending = false;
+async function markHere() {
+  const b = $('bMark');
+  if (b.disabled || markPending) return;
+  markPending = true;
+  b.disabled = true;
+  try {
+    const r = await postJSON('/api/mark');
+    toast(`Marca agregada en ${r.lat.toFixed(6)}, ${r.lon.toFixed(6)}`);
+    setTimeout(refreshState, 300);                // aparece sin esperar el próximo segundo
+  } catch (e) {
+    toast('No se pudo marcar: ' + e.message, true);
+  }
+  setTimeout(() => { markPending = false; b.disabled = !gpsOk(); }, 600);   // evita dobles clics
+}
+async function deleteMark(id) {
+  const p = state && state.persons.find(q => q.id === id);
+  if (!p || !confirm(`¿Borrar la marca ${p.etiqueta}?`)) return;
+  try { await postJSON('/api/mark/delete', { id }); setTimeout(refreshState, 300); }
+  catch (e) { toast('No se pudo borrar: ' + e.message, true); }
+}
+$('bMark').onclick = markHere;
+window.addEventListener('keydown', ev => {
+  if ((ev.key === 'm' || ev.key === 'M') && !ev.ctrlKey && !ev.metaKey && !ev.altKey
+      && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) markHere();
 });
 
 // ---------------------------------------------------------------- datos
@@ -616,6 +712,7 @@ function onLive() {
     const hdg = live.heading_deg != null ? ` · rumbo ${deg3(live.heading_deg)}` : '';
     d.textContent = `Dron: ${live.lat.toFixed(6)}, ${live.lon.toFixed(6)}${alt}${hdg}`;
   }
+  if (!markPending) $('bMark').disabled = !gpsOk();
   renderStats();
   requestDraw();
 }
@@ -633,9 +730,12 @@ function updateStatus() {
   renderRows();                                        // distancia al dron y destacadas
 }
 
-async function pollState() {
+async function refreshState() {
   try { onState(await getJSON('/api/state')); lastStateOk = Date.now(); }
   catch (e) { /* sin conexión: updateStatus lo muestra */ }
+}
+async function pollState() {
+  await refreshState();
   setTimeout(pollState, 1000);
 }
 async function pollLive() {

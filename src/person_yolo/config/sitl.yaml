@@ -26,7 +26,10 @@ person_detector:
       tile_size: 640
       overlap: 0.1
       conf: 0.25                 # más bajo: una persona lejana da menos score
-      every_n_frames: 4          # 2-4 para ahorrar GPU (1 satura la PC con Unreal)
+      # AirSim entrega ~5 Hz a 1080p (solo yolo_cam) y full + tiles tarda ~90 ms:
+      # sobra tiempo para tiles en TODOS los frames. Las lejanas solo salen en tiles.
+      # Si la cámara llega a >10 Hz y satura la GPU, volver a 2.
+      every_n_frames: 1
       batch_size: 0              # 0 = todos los tiles en un solo batch
       merge_thr: 0.5
       merge_metric: ios          # ios elimina la caja chica dentro de la grande
@@ -34,15 +37,21 @@ person_detector:
     # Conteo de personas DISTINTAS (/yolo/person_total, ver tracker.py)
     counting:
       min_hits: 3                # frames con detección para contar a alguien
-      max_age_sec: 1.5           # sin verlo más que esto...
-      max_missed: 3              # ...y en 3 frames CON tiles seguidos -> si vuelve, cuenta de nuevo
+      # AirSim da pocos Hz (1-5): con 1.5 s / 3 frames una persona lejana que
+      # parpadea se olvidaba y se volvía a contar en cada tanda.
+      max_age_sec: 3.0           # sin verlo más que esto...
+      max_missed: 6              # ...y en 6 inferencias seguidas (con o sin tiles) -> si vuelve, cuenta de nuevo
       iou_thr: 0.2
       dist_thr: 1.0              # salto máx. del centro, en diagonales de la caja
       # Waypoint (persons.py): se pone tras seguir a la persona min_seen_sec, con
       # su mejor posición; si no se ubica, se espera hasta max_wait_sec.
       min_seen_sec: 2.0
       max_wait_sec: 6.0
-      dedupe_radius_m: 4.0       # misma persona que vuelve a entrar al cuadro; 0 = apagado
+      dedupe_radius_m: 6.0       # misma persona que vuelve a entrar al cuadro; 0 = apagado
+      dedupe_approx_radius_m: 10.0  # aproximadas: dron a menos de esto de donde la marcó; 0 = apagado
+      # No marcar con ±20 m si acercándose se la ubica mejor: se espera (hasta
+      # max_wait_sec) una posición con error <= esto. 0 = no esperar.
+      max_error_m: 8.0
 
     annotated_scale: 1.0
     jpeg_quality: 75
@@ -58,7 +67,16 @@ person_detector:
       camera_hfov_deg: 90.0      # = FOV_Degrees de yolo_cam
       camera_pitch_deg: -30.0    # = Pitch de yolo_cam
       person_height_m: 0.9       # se apunta al centro de la persona
-      max_incidence_deg: 65.0    # más rasante = no se ubica (error sin control)
+      # Hasta 80°: una persona lejana se ubica con error grande (honesto, crece con
+      # 1/cos²) en vez de quedar "aproximada" en la posición del dron y duplicarse.
+      max_incidence_deg: 80.0    # más rasante = no se ubica
+      # Vuelo a mano + imagen a pocos Hz: el desfase imagen/actitud que queda tras
+      # sincronizar se cubre con más error de actitud.
+      sigma_att_deg: 2.0
+      # Actitud/GPS del instante de la imagen. image_delay_sec: cuánto antes de su
+      # stamp se sacó (ver "retraso imagen" en el log; 0 = el stamp es la captura).
+      sync: true
+      image_delay_sec: 0.0
       agl_topic: /airsim_node/PX4/distance/down
       agl_is_slant: true         # sensor fijo al cuerpo: se corrige por la inclinación
       sigma_alt_lidar: 0.3
@@ -95,6 +113,7 @@ trail_node:
     save_period_sec: 10.0
     grid_step_m: 50.0            # grilla del mapa centrada en home; 0 = sin grilla
     web_port: 8081               # mapa de rescate en http://localhost:8081; 0 = apagado
+    web_marks: true              # botón "Marcar aquí" (marca en la posición del dron)
 
 foxglove_bridge:
   ros__parameters:

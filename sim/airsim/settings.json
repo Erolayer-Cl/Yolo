@@ -1,0 +1,79 @@
+{
+    "SettingsVersion": 1.2,
+    "SimMode": "Multirotor",
+    "ClockSpeed": 1.0,
+    "OriginGeopoint": {
+        "Latitude": -33.467225,
+        "Longitude": -70.657605,
+        "Altitude": 500
+    },
+    "Vehicles": {
+        "PX4": {
+            "VehicleType": "PX4Multirotor",
+            "UseSerial": false,
+            "LockStep": false,
+            "UseTcp": true,
+            "TcpPort": 4560,
+            "ControlPort": 14320,
+            "LocalHostIp": "0.0.0.0",
+            "Sensors": {
+                "Barometer": {
+                    "SensorType": 1,
+                    "Enabled": true,
+                    "PressureFactorSigma": 0.0001825
+                },
+                "Imu": {
+                    "SensorType": 2,
+                    "Enabled": true
+                },
+                "Gps": {
+                    "SensorType": 3,
+                    "Enabled": true
+                },
+                "Magnetometer": {
+                    "SensorType": 4,
+                    "Enabled": true
+                },
+                "down": {
+                    "SensorType": 5,
+                    "Enabled": true,
+                    "ExternalController": false,
+                    "X": 0.0,
+                    "Y": 0.0,
+                    "Z": 0.3,
+                    "Pitch": -90.0,
+                    "Roll": 0.0,
+                    "Yaw": 0.0,
+                    "MinDistance": 0.2,
+                    "MaxDistance": 40.0,
+                    "DrawDebugPoints": false
+                }
+            },
+            "Cameras": {
+                "yolo_cam": {
+                    "CaptureSettings": [
+                        {
+                            "ImageType": 0,
+                            "Width": 1920,
+                            "Height": 1080,
+                            "FOV_Degrees": 90,
+                            "TargetGamma": 2.2,
+                            "MotionBlurAmount": 0,
+                            "AutoExposureSpeed": 100,
+                            "AutoExposureBias": 0,
+                            "AutoExposureMaxBrightness": 0.64,
+                            "AutoExposureMinBrightness": 0.03,
+                            "ChromaticAberrationScale": 0
+                        }
+                    ],
+                    "X": 0.3,
+                    "Y": 0.0,
+                    "Z": -0.1,
+                    "Pitch": -30.0,
+                    "Roll": 0.0,
+                    "Yaw": 0.0
+                }
+            }
+        }
+    }
+}

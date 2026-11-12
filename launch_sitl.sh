@@ -5,11 +5,17 @@
 #
 #   ./launch_sitl.sh            # todo
 #   FOXGLOVE=0 ./launch_sitl.sh # sin foxglove_bridge (si ya tenés otro corriendo)
+#   MODEL=visdrone_s.pt ./launch_sitl.sh   # otro peso de models/ (vacío = el de sitl.yaml)
 set -e
 SESSION="yolo_sitl"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-UAV_LAB_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
+# Layout esperado: UAV_lab/Code/YOLO. Si el repo está en otro lugar (p. ej. ~/yolo-ref)
+# se prueba ~/Workspace/UAV_lab; o a mano: UAV_LAB_DIR=~/otro/UAV_lab ./launch_sitl.sh
+if [ -z "$UAV_LAB_DIR" ]; then
+  UAV_LAB_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
+  [ -d "$UAV_LAB_DIR/dependencias" ] || UAV_LAB_DIR="$HOME/Workspace/UAV_lab"
+fi
 WS_DIR="$SCRIPT_DIR"
 # PX4 v1.17.0, el mismo firmware que la Pixhawk real (compartido con
 # UAV_ros2-beta y Mision_1).
@@ -26,6 +32,12 @@ if [ ! -d "$PX4_DIR" ]; then
   echo "❌ No existe $PX4_DIR. Bajalo con:"
   echo "   git clone --branch v1.17.0 --depth 1 --recurse-submodules --shallow-submodules \\"
   echo "     https://github.com/PX4/PX4-Autopilot.git $PX4_DIR"
+  echo "   (instalación completa: docs/INSTALACION.md, o ./scripts/verificar_entorno.sh)"
+  exit 1
+fi
+if [ ! -f "$AIRSIM_ROS_DIR/install/setup.bash" ]; then
+  echo "❌ Falta compilar el ros2/ de Cosys-AirSim en $AIRSIM_ROS_DIR"
+  echo "   Ver docs/INSTALACION.md, paso 5 (o UAV_LAB_DIR=... si está en otro lugar)."
   exit 1
 fi
 # px4_msgs distinto al firmware = /fmu/out/* existen pero no llega nada.
@@ -90,7 +102,7 @@ tmux select-layout -t $SESSION:sim tiled
 # Arranca más tarde: la carga del modelo compite por GPU con Unreal y PX4.
 FOX="true"; [ "${FOXGLOVE:-1}" = "0" ] && FOX="false"
 PANE_DEMO=$(tmux new-window -t $SESSION -n demo -P -F '#{pane_id}')
-tmux send-keys -t "$PANE_DEMO" "cd $WS_DIR && source $ROS_SETUP && source install/setup.bash && export YOLO_WS=$WS_DIR && sleep 12 && ros2 launch person_yolo demo.launch.py config:=sitl.yaml camera:=false foxglove:=$FOX" C-m
+tmux send-keys -t "$PANE_DEMO" "cd $WS_DIR && source $ROS_SETUP && source install/setup.bash && export YOLO_WS=$WS_DIR && sleep 12 && ros2 launch person_yolo demo.launch.py config:=sitl.yaml camera:=false foxglove:=$FOX ${MODEL:+model:=$MODEL}" C-m
 
 PANE_ECHO=$(tmux split-window -v -t "$PANE_DEMO" -l 30% -P -F '#{pane_id}')
 tmux send-keys -t "$PANE_ECHO" "cd $WS_DIR && source $ROS_SETUP && source install/setup.bash && sleep 15 && ros2 topic echo --no-daemon /drone/status --field data" C-m

@@ -1,0 +1,16 @@
+# Entorno con el que se entrenaron y evaluaron n_final y s_final (2026-11-09).
+# Venv ~/venvs/yolo-train, Python 3.12.3, GPU RTX 4060 8 GB, CUDA 13.2 (torch 2.15.0+cu132).
+#   python3 -m venv ~/venvs/yolo-train && . ~/venvs/yolo-train/bin/activate
+#   pip install -r training/requirements.txt
+# torch para CUDA: instalarlo antes desde https://pytorch.org con el índice de tu CUDA;
+# el de PyPI puede venir para otra versión. Versiones sacadas de `pip freeze` de ese venv.
+ultralytics==8.4.208
+torch==2.15.0
+torchvision==0.29.2
+numpy==2.5.4
+opencv-python==5.0.0.93
+pillow==13.0.0
+PyYAML==6.0.3
+matplotlib==3.11.2
+polars==2.1.0
+pytest

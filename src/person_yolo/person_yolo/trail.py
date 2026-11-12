@@ -66,12 +66,22 @@ class PersonSpot:
     score: float
     drone_lat: float
     drone_lon: float
+    # Marca a mano desde la web (Trail.add_mark): la posición es la del DRON en ese
+    # momento. id negativo (-1, -2...) para no chocar con los del detector;
+    # se muestra como M1, M2...
+    manual: bool = False
+
+    @property
+    def label(self) -> str:
+        return f'M{-self.id}' if self.manual else str(self.id)
 
     def has_error(self) -> bool:
         return self.located and not math.isnan(self.error_m)
 
     def coords_text(self) -> str:
         """Coordenadas para rescatarla, o aviso si solo se sabe dónde estaba el dron."""
+        if self.manual:
+            return f'{self.lat:.6f}, {self.lon:.6f} (marca manual, posición del dron)'
         if not self.located:
             return 'APROXIMADA, posición del dron'
         err = f' ±{self.error_m:.1f} m' if self.has_error() else ''
@@ -123,6 +133,10 @@ class Trail:
     home: TrailPoint = None
     total_m: float = 0.0
     dirty: bool = False
+    marks_n: int = 0                # marcas manuales creadas (no se reutilizan)
+    # (id, t) de personas borradas por un merge: un fix que llega tarde (ya estaba
+    # en la cola de ROS) no tiene que volver a crearlas.
+    removed: set = field(default_factory=set)
 
     def add(self, p: TrailPoint) -> bool:
         """Agrega `p` si se alejó >= min_step_m (3D) del último. True si entró."""
@@ -155,7 +169,10 @@ class Trail:
         """Registra una persona distinta, o le mejora la posición si ya está
         (mismo id y misma `t`, la de su primera alerta: si el detector se reinicia,
         un id repetido es otra persona). No se fusiona nada más: dos personas
-        juntas tienen que quedar como dos puntos."""
+        juntas tienen que quedar como dos puntos. Una persona ya borrada por un
+        merge no se vuelve a crear."""
+        if (spot.id, round(spot.t, 3)) in self.removed:
+            return
         for i, p in enumerate(self.persons):
             if p.id == spot.id and abs(p.t - spot.t) < 1e-3:
                 if spot.located or not p.located:
@@ -164,6 +181,34 @@ class Trail:
                 return
         self.persons.append(spot)
         self.dirty = True
+
+    def remove_person(self, pid: int, t: float) -> bool:
+        """Borra la persona (id, t): el detector se dio cuenta de que era otra ya
+        marcada (/yolo/person_merge). True si estaba. Queda recordada: no se
+        vuelve a crear aunque llegue después un fix suyo."""
+        self.removed.add((pid, round(t, 3)))
+        n = len(self.persons)
+        self.persons = [p for p in self.persons
+                        if p.manual or not (p.id == pid and abs(p.t - t) < 1e-3)]
+        self.dirty = self.dirty or len(self.persons) != n
+        return len(self.persons) != n
+
+    def add_mark(self, t: float, lat: float, lon: float) -> PersonSpot:
+        """Marca a mano en la posición del dron (botón de la web)."""
+        self.marks_n += 1
+        spot = PersonSpot(t=t, id=-self.marks_n, lat=lat, lon=lon, located=True,
+                          error_m=float('nan'), score=0.0, drone_lat=lat, drone_lon=lon,
+                          manual=True)
+        self.persons.append(spot)
+        self.dirty = True
+        return spot
+
+    def remove_mark(self, pid: int) -> bool:
+        """Borra una marca manual (id negativo). Las del detector no se borran a mano."""
+        n = len(self.persons)
+        self.persons = [p for p in self.persons if not (p.manual and p.id == pid)]
+        self.dirty = self.dirty or len(self.persons) != n
+        return len(self.persons) != n
 
     # ------------------------------------------------------------- exports
     def to_geojson(self) -> dict:
@@ -187,16 +232,18 @@ class Trail:
         # Los anillos van antes que los puntos: así quedan dibujados debajo.
         feats.extend(_search_ring(p) for p in self.persons if p.has_error())
         for p in self.persons:
-            # Rojo = ubicada en el suelo; naranja = solo se sabe dónde estaba el dron.
+            # Rojo = ubicada en el suelo; naranja = solo se sabe dónde estaba el dron;
+            # azul = marca manual.
+            color = '#2563eb' if p.manual else '#e74c3c' if p.located else '#e67e22'
             feats.append(_point(p.lon, p.lat, {
-                'name': f'persona #{p.id}: {p.coords_text()}',
+                'name': f'{"marca" if p.manual else "persona"} #{p.label}: {p.coords_text()}',
                 'metadata': self._person_metadata(p),
                 'ubicada': p.located,
+                'manual': p.manual,
                 'error_m': None if math.isnan(p.error_m) else round(p.error_m, 1),
                 'score': round(p.score, 2),
                 't': round(p.t, 2),
-                'style': {'color': '#e74c3c' if p.located else '#e67e22',
-                          'radius': 7, 'fillOpacity': 0.9},
+                'style': {'color': color, 'radius': 7, 'fillOpacity': 0.9},
             }))
         return {'type': 'FeatureCollection', 'features': feats}
 
@@ -231,6 +278,8 @@ class Trail:
                 north, east = round(north, 1), round(east, 1)
             out.append({
                 'id': p.id,
+                'etiqueta': p.label,
+                'manual': p.manual,
                 'ubicada': p.located,
                 'lat': round(p.lat, 8) if p.located else None,
                 'lon': round(p.lon, 8) if p.located else None,
@@ -323,7 +372,7 @@ class Trail:
                        '</coordinates></Point></Placemark>')
         for p in self.persons:
             out.append(
-                f'<Placemark><name>Persona #{p.id}</name>'
+                f'<Placemark><name>{"Marca" if p.manual else "Persona"} #{p.label}</name>'
                 f'<description>{p.coords_text()}, score {p.score:.2f}, t={p.t:.1f}s</description>'
                 '<styleUrl>#persona</styleUrl>'
                 f'<Point><coordinates>{p.lon:.8f},{p.lat:.8f},0</coordinates></Point>'
@@ -344,11 +393,13 @@ class Trail:
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(['id', 't', 'lat', 'lon', 'ubicada', 'error_m', 'score',
-                    'drone_lat', 'drone_lon'])
+                    'drone_lat', 'drone_lon', 'manual', 'etiqueta'])
         for p in self.persons:
+            # id: siempre el número (negativo en las marcas manuales); la etiqueta
+            # que se ve en el mapa (1, 2, M1...) va al final, sin correr columnas.
             w.writerow([p.id, f'{p.t:.3f}', f'{p.lat:.8f}', f'{p.lon:.8f}',
                         int(p.located), _fmt(p.error_m), f'{p.score:.3f}',
-                        f'{p.drone_lat:.8f}', f'{p.drone_lon:.8f}'])
+                        f'{p.drone_lat:.8f}', f'{p.drone_lon:.8f}', int(p.manual), p.label])
         return buf.getvalue()
 
     def geojson_str(self, grid_step_m=0.0) -> str:

@@ -25,6 +25,11 @@ Publica:
                                     que la posición de una persona mejora mientras
                                     se la sigue viendo. `t` es el de su alerta
                                     (identifica a la persona); `fix_t`, el de ahora.
+                                    La posición es la FUSIÓN de todas sus
+                                    observaciones (persons.py), no la del último frame.
+  /yolo/person_merge                std_msgs/String (JSON): dos marcas eran la misma
+                                    persona: {id, t, removed_id, removed_t, total}.
+                                    La `removed` se borra del mapa.
   /yolo/person_events               std_msgs/String (JSON, solo si hay personas):
                                     t, count, total, ids, max_score, lat, lon,
                                     alt_msl, alt_rel, heading_deg, x, y, z
@@ -63,6 +68,7 @@ from vision_msgs.msg import (
 import cv2
 
 from person_yolo.geolocate import Camera, cos_tilt, locate, touches_edge
+from person_yolo.history import History
 from person_yolo.inference import InferenceParams, detect_persons, results_to_boxes
 from person_yolo.model_path import is_downloadable, resolve_model_path
 from person_yolo.node_main import run
@@ -112,6 +118,11 @@ class PersonDetector(Node):
         self.declare_parameter('counting.min_seen_sec', 2.0)    # seguirla esto antes del waypoint
         self.declare_parameter('counting.max_wait_sec', 6.0)    # ...y hasta esto si no se ubica
         self.declare_parameter('counting.dedupe_radius_m', 4.0)  # 0 = sin buscar duplicados
+        # Aproximadas: misma persona si el dron está a menos de esto de donde la marcó
+        self.declare_parameter('counting.dedupe_approx_radius_m', 10.0)  # 0 = apagado
+        # Esperar (hasta max_wait_sec) una posición con error <= esto antes de marcar;
+        # 0 = no esperar (marcar apenas pasa min_seen_sec, como antes).
+        self.declare_parameter('counting.max_error_m', 0.0)
 
         self.declare_parameter('annotated_scale', 1.0)
         self.declare_parameter('jpeg_quality', 75)
@@ -135,6 +146,11 @@ class PersonDetector(Node):
         # Piso del error del GPS: PX4 puede informar 0.1 m (siempre en SITL) y el
         # margen de la persona saldría irrealmente chico.
         self.declare_parameter('geolocate.sigma_gps_min', 1.0)
+        # Actitud/GPS/pose del instante de la IMAGEN (history.py), no los de ahora.
+        # image_delay_sec: cuánto antes de su header.stamp se sacó la imagen.
+        self.declare_parameter('geolocate.sync', True)
+        self.declare_parameter('geolocate.image_delay_sec', 0.0)
+        self.declare_parameter('geolocate.sync_max_gap_sec', 0.25)
 
         gp = self.get_parameter
         self.image_topic = gp('image_topic').value
@@ -167,6 +183,9 @@ class PersonDetector(Node):
             'max_incidence_deg': float(gp('geolocate.max_incidence_deg').value),
             'sigma_pix': float(gp('geolocate.sigma_pix').value),
             'sigma_att_deg': float(gp('geolocate.sigma_att_deg').value)}
+        self.sync = bool(gp('geolocate.sync').value)
+        self.image_delay = float(gp('geolocate.image_delay_sec').value)
+        self.sync_max_gap = float(gp('geolocate.sync_max_gap_sec').value)
         self.agl_is_slant = bool(gp('geolocate.agl_is_slant').value)
         self.sigma_alt_lidar = float(gp('geolocate.sigma_alt_lidar').value)
         self.sigma_alt_home = float(gp('geolocate.sigma_alt_home').value)
@@ -175,7 +194,9 @@ class PersonDetector(Node):
             min_seen_sec=float(gp('counting.min_seen_sec').value),
             max_wait_sec=float(gp('counting.max_wait_sec').value),
             forget_sec=float(gp('counting.max_age_sec').value),
-            dedupe_radius_m=float(gp('counting.dedupe_radius_m').value))
+            dedupe_radius_m=float(gp('counting.dedupe_radius_m').value),
+            approx_radius_m=float(gp('counting.dedupe_approx_radius_m').value),
+            max_error_m=float(gp('counting.max_error_m').value) or float('inf'))
         # Una persona lejana solo aparece en los frames con tiles: max_missed
         # cuenta frames CON tiles, si no se la olvidaría entre uno y otro.
         max_missed = max(1, int(gp('counting.max_missed').value))
@@ -248,6 +269,7 @@ class PersonDetector(Node):
         self.pub_total.publish(Int32(data=0))
         self.pub_alert = self.create_publisher(String, '/yolo/person_alert', 50)
         self.pub_fix = self.create_publisher(String, '/yolo/person_fix', 50)
+        self.pub_merge = self.create_publisher(String, '/yolo/person_merge', 50)
         self.create_service(Trigger, '/yolo/person_total/reset', self._on_reset_total)
         self.pub_jpg = self.create_publisher(
             CompressedImage, '/yolo/image_annotated/compressed', sensor_qos)
@@ -265,6 +287,14 @@ class PersonDetector(Node):
         self.att = None
         self.agl = None
         self._gps_t = self._pose_t = self._att_t = self._agl_t = 0.0
+        # Por header.stamp, para ubicar con el estado del instante de la imagen.
+        self._h_att, self._h_gps, self._h_pose = History(), History(), History()
+        # Estado usado para el frame en curso (ver _state_at); lo leen
+        # _locate_person, _height y _where.
+        self._snap = {'att': None, 'gps': None, 'pose': None, 'synced': False}
+        self._lag_sum = 0.0             # stamp de la imagen -> llegada (para el log)
+        self._synced_n = 0
+        self._warned_sync = False
 
         self.events_csv = None
         csv_path = gp('events_csv').value
@@ -361,15 +391,39 @@ class PersonDetector(Node):
                  and math.isfinite(msg.latitude) and math.isfinite(msg.longitude))
         self.gps = msg if valid else None
         self._gps_t = time.monotonic()
+        if valid:
+            self._h_gps.add(_stamp_s(msg), msg)
 
     def _on_pose(self, msg: PoseStamped):
         self.pose = msg
         self._pose_t = time.monotonic()
+        self._h_pose.add(_stamp_s(msg), msg)
 
     def _on_attitude(self, msg: QuaternionStamped):
         q = msg.quaternion
         self.att = (q.w, q.x, q.y, q.z)
         self._att_t = time.monotonic()
+        self._h_att.add(_stamp_s(msg), self.att)
+
+    def _state_at(self, t):
+        """Actitud, GPS y pose del instante `t` (stamp de la imagen menos
+        image_delay_sec). Si el historial no lo cubre (stamps de otro reloj,
+        rosbag viejo, sync apagado) se usan los últimos, como antes."""
+        latest = {'att': self.att, 'gps': self.gps, 'pose': self.pose, 'synced': False}
+        if not self.sync:
+            return latest
+        got = {k: h.at(t, self.sync_max_gap) for k, h in
+               (('att', self._h_att), ('gps', self._h_gps), ('pose', self._h_pose))}
+        if got['att'] is None or got['gps'] is None:
+            if not self._warned_sync and len(self._h_att):
+                self._warned_sync = True
+                self.get_logger().warn(
+                    'No hay actitud/GPS cerca del stamp de la imagen (¿relojes '
+                    'distintos?): se ubica con los últimos valores. Ver '
+                    'geolocate.image_delay_sec / geolocate.sync.')
+            return latest
+        return {'att': got['att'][0], 'gps': got['gps'][0],
+                'pose': got['pose'][0] if got['pose'] else self.pose, 'synced': True}
 
     def _on_agl(self, msg: Range):
         self.agl = msg
@@ -394,40 +448,47 @@ class PersonDetector(Node):
         """(altura de la cámara sobre el suelo, fuente, sigma) o None.
         Lidar si hay una lectura fresca y en rango; si no, altura sobre el
         despegue (supone suelo plano, más error)."""
-        r = self.agl
+        r = self.agl                            # la altura cambia lento: la última
+        att, pose = self._snap['att'], self._snap['pose']
         if (r is not None and self._fresh(self._agl_t) and math.isfinite(r.range)
                 and r.min_range <= r.range < r.max_range):
             h = r.range
             if self.agl_is_slant:               # lidar fijo al cuerpo: medida inclinada
-                h *= max(0.0, cos_tilt(self.att))
+                h *= max(0.0, cos_tilt(att))
             return h, 'lidar', self.sigma_alt_lidar
-        if self.pose is not None and self._fresh(self._pose_t):
-            return self.pose.pose.position.z, 'home', self.sigma_alt_home
+        if pose is not None and self._fresh(self._pose_t):
+            return pose.pose.position.z, 'home', self.sigma_alt_home
         return None
 
-    def _locate_person(self, box, width, height):
+    def _locate_person(self, box, width, height, edge=False):
         """Posición de la persona en el suelo (dict de geolocate.locate + agl)
-        y un motivo si no se pudo."""
+        y un motivo si no se pudo. Con el estado del instante de la imagen
+        (self._snap). `edge`: caja cortada por el borde de la imagen; su centro
+        no es el de la persona, así que se suma media caja al error del píxel."""
         if not self.geo:
             return None, 'desactivado'
-        if self.gps is None or not self._fresh(self._gps_t):
+        gps, att = self._snap['gps'], self._snap['att']
+        if gps is None or not self._fresh(self._gps_t):
             return None, 'sin GPS'
-        if self.att is None or not self._fresh(self._att_t):
+        if att is None or not self._fresh(self._att_t):
             return None, 'sin actitud'
         hgt = self._height()
         if hgt is None:
             return None, 'sin altura'
-        cov = self.gps.position_covariance
+        cov = gps.position_covariance
         sigma_gps = max(self.sigma_gps_min, math.sqrt(cov[0])
-                        if self.gps.position_covariance_type and cov[0] > 0 else 2.5)
+                        if gps.position_covariance_type and cov[0] > 0 else 2.5)
         x1, y1, x2, y2 = (float(v) for v in box[:4])
+        kw = dict(self.geo_kw)
+        if edge:
+            kw['sigma_pix'] = math.hypot(kw['sigma_pix'], max(x2 - x1, y2 - y1) / 2.0)
         r = locate((x1 + x2) / 2.0, (y1 + y2) / 2.0, width, height, self.geo_cam,
-                   self.att, hgt[0], self.gps.latitude, self.gps.longitude,
-                   sigma_alt=hgt[2], sigma_gps=sigma_gps, **self.geo_kw)
+                   att, hgt[0], gps.latitude, gps.longitude,
+                   sigma_alt=hgt[2], sigma_gps=sigma_gps, **kw)
         if r is None:
             return None, 'rayo muy rasante o sobre el horizonte'
-        r.update(agl_m=hgt[0], agl_source=hgt[1])
-        return r, 'ok'
+        r.update(agl_m=hgt[0], agl_source=hgt[1], edge=edge, synced=self._snap['synced'])
+        return r, 'ok (caja cortada por el borde)' if edge else 'ok'
 
     def _where(self):
         """Posición actual del dron para etiquetar detecciones (None si falta o
@@ -435,11 +496,12 @@ class PersonDetector(Node):
         posición de hace minutos sería engañosa)."""
         w = {'lat': None, 'lon': None, 'alt_msl': None, 'alt_rel': None,
              'heading_deg': None, 'x': None, 'y': None, 'z': None}
-        if self.gps is not None and self._fresh(self._gps_t):
-            w.update(lat=round(self.gps.latitude, 8), lon=round(self.gps.longitude, 8),
-                     alt_msl=round(self.gps.altitude, 2))
-        if self.pose is not None and self._fresh(self._pose_t):
-            p, q = self.pose.pose.position, self.pose.pose.orientation
+        gps, pose = self._snap['gps'], self._snap['pose']   # del instante de la imagen
+        if gps is not None and self._fresh(self._gps_t):
+            w.update(lat=round(gps.latitude, 8), lon=round(gps.longitude, 8),
+                     alt_msl=round(gps.altitude, 2))
+        if pose is not None and self._fresh(self._pose_t):
+            p, q = pose.pose.position, pose.pose.orientation
             w.update(x=round(p.x, 2), y=round(p.y, 2), z=round(p.z, 2),
                      alt_rel=round(p.z, 2),
                      heading_deg=round(enu_quat_to_heading_deg(q.z, q.w), 1))
@@ -480,6 +542,10 @@ class PersonDetector(Node):
         if self.min_period and (now - self._last_infer) < self.min_period:
             return
         self._last_infer = now
+        # Estado del dron cuando se sacó la imagen (no cuando termine la inferencia).
+        img_t = _stamp_s(msg)
+        self._snap = self._state_at(img_t - self.image_delay)
+        lag = self.get_clock().now().nanoseconds * 1e-9 - img_t
 
         try:
             frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -487,6 +553,10 @@ class PersonDetector(Node):
             self.get_logger().error(f'No se pudo convertir la imagen: {exc}',
                                     throttle_duration_sec=5.0)
             return
+        # Después de convertir: se promedian sobre _frames_done, que no cuenta
+        # los frames que fallaron arriba.
+        self._lag_sum += lag
+        self._synced_n += int(self._snap['synced'])
 
         boxes, src, tiles = self._infer(frame)
         self._frame_idx += 1
@@ -497,8 +567,7 @@ class PersonDetector(Node):
         tracks = self.counter.update(boxes, time.monotonic())
 
         where = self._where()
-        stamp = msg.header.stamp
-        stamp_t = round(stamp.sec + stamp.nanosec * 1e-9, 3)
+        stamp_t = round(img_t, 3)
         obs = self._observations(boxes, tracks, where, frame.shape[1], frame.shape[0])
         self._publish_person_events(self.registry.update(time.monotonic(), stamp_t, obs),
                                     stamp_t)
@@ -559,16 +628,22 @@ class PersonDetector(Node):
                                 where['heading_deg'], where['x'], where['y'], where['z']])
             self.events_csv.flush()
 
-    def _person_msg(self, t, pid, box, geo, why, where):
-        x1, y1, x2, y2, score = (float(v) for v in box[:5])
+    def _person_msg(self, t, pid, obs, why, where):
+        """`obs` es la del evento: lat/lon/error_m = posición FUSIONADA de la
+        persona (persons.py); geo/box del payload = la observación de este frame."""
+        p = obs.payload
+        geo = p['geo']
+        x1, y1, x2, y2, score = (float(v) for v in p['box'][:5])
+        if obs.located and not geo:
+            why = 'ok (fusión de observaciones anteriores)'
         return {'t': t,
                 'id': int(pid),
                 'total': self.registry.total,
                 'score': round(score, 3),
                 'bbox': [round(x1), round(y1), round(x2), round(y2)],
-                'person_lat': round(geo['lat'], 8) if geo else None,
-                'person_lon': round(geo['lon'], 8) if geo else None,
-                'person_error_m': round(geo['error_m'], 1) if geo else None,
+                'person_lat': round(obs.lat, 8) if obs.located else None,
+                'person_lon': round(obs.lon, 8) if obs.located else None,
+                'person_error_m': round(obs.error_m, 1) if obs.located else None,
                 'person_dist_m': round(geo['dist_m'], 1) if geo else None,
                 'agl_m': round(geo['agl_m'], 2) if geo else None,
                 'agl_source': geo['agl_source'] if geo else None,
@@ -577,30 +652,32 @@ class PersonDetector(Node):
 
     def _observations(self, boxes, tracks, where, width, height):
         """Una Observation por track confirmado, con la posición de la persona si
-        se pudo calcular. Una caja cortada por el borde no se ubica: su centro
-        no es el de la persona."""
+        se pudo calcular. Una caja cortada por el borde se ubica igual, con más
+        error (su centro no es el de la persona): si no, quedaba como aproximada
+        en la posición del dron y se duplicaba al verla después en el centro."""
         out = []
         for box, tid in zip(boxes, tracks):
             if not tid:
                 continue
-            if touches_edge(box, width, height):
-                geo, why = None, 'caja cortada por el borde'
-            else:
-                geo, why = self._locate_person(box, width, height)
+            geo, why = self._locate_person(box, width, height,
+                                           edge=touches_edge(box, width, height))
             payload = {'box': box, 'geo': geo, 'why': why, 'where': where}
+            drone = {'drone_lat': where['lat'], 'drone_lon': where['lon']}
             if geo:
                 out.append(Observation(int(tid), geo['lat'], geo['lon'], geo['error_m'],
-                                       payload))
+                                       payload, **drone))
             else:
-                out.append(Observation(int(tid), payload=payload))
+                out.append(Observation(int(tid), payload=payload, **drone))
         return out
 
     def _publish_person_events(self, events, stamp_t):
         """Alerta = waypoint nuevo (la persona se siguió counting.min_seen_sec, ver
         persons.py); fix = mejor posición de una persona ya marcada. Llevan la
-        posición de la PERSONA en el suelo si se pudo calcular, y siempre la del
-        dron en el momento de esa observación."""
-        if any(e.kind == 'alert' for e in events):
+        posición de la PERSONA en el suelo (la fusión de todas sus observaciones)
+        si se pudo calcular, y siempre la del dron en el momento de esa
+        observación. merge = dos marcas eran la misma persona: se borra una
+        (/yolo/person_merge) y la otra sale como fix con la posición combinada."""
+        if any(e.kind in ('alert', 'merge') for e in events):
             self.pub_total.publish(Int32(data=self.registry.total))
         for e in events:
             p = e.obs.payload
@@ -608,18 +685,26 @@ class PersonDetector(Node):
                 self.get_logger().info(
                     f'Persona #{e.person_id} vuelve a estar a la vista: no es nueva')
                 continue
-            m = self._person_msg(e.t, e.person_id, p['box'], p['geo'], p['why'], p['where'])
-            if e.kind == 'fix':
+            m = self._person_msg(e.t, e.person_id, e.obs, p['why'], p['where'])
+            if e.kind == 'merge':
+                rid, rt = e.removed
+                self.pub_merge.publish(String(data=json.dumps(
+                    {'id': e.person_id, 't': e.t, 'removed_id': rid, 'removed_t': rt,
+                     'total': self.registry.total})))
+                self.get_logger().info(
+                    f'Persona #{rid} era la #{e.person_id}: se unen (total '
+                    f'{self.registry.total})')
+            if e.kind in ('fix', 'merge'):
                 m['fix_t'] = stamp_t
                 self.pub_fix.publish(String(data=json.dumps(m)))
                 continue
             self.pub_alert.publish(String(data=json.dumps(m)))
             geo, why, where, pid = p['geo'], p['why'], p['where'], e.person_id
             score = float(p['box'][4])
-            if geo:
-                pos = (f'lat={geo["lat"]:.6f} lon={geo["lon"]:.6f} '
-                       f'(±{geo["error_m"]:.0f} m, a {geo["dist_m"]:.0f} m del dron, '
-                       f'altura por {geo["agl_source"]})')
+            if e.obs.located:
+                dist = f', a {geo["dist_m"]:.0f} m del dron' if geo else ''
+                pos = (f'lat={e.obs.lat:.6f} lon={e.obs.lon:.6f} '
+                       f'(±{e.obs.error_m:.0f} m{dist})')
             elif where['lat'] is not None:
                 pos = f'posición del dron lat={where["lat"]:.6f} lon={where["lon"]:.6f} ({why})'
             else:
@@ -677,16 +762,27 @@ class PersonDetector(Node):
             f'inferencia {self._frames_done / elapsed:.1f} Hz | '
             f'full {1000.0 * self._t_full / n:.0f} ms + tiles {tiles_ms:.0f} ms '
             f'({self._frames_tiled}/{self._frames_done} frames) | {self.device} | '
-            f'personas distintas {self.registry.total}'
+            f'personas distintas {self.registry.total} | '
+            # retraso = de header.stamp de la imagen a su llegada; sync = frames
+            # ubicados con el estado del instante de la imagen (resto: el último).
+            f'retraso imagen {1000.0 * self._lag_sum / n:.0f} ms, '
+            f'sync {self._synced_n}/{self._frames_done}'
             + ('' if self.gps and self._fresh(self._gps_t) else ' | SIN GPS'))
         self._frames_in = self._frames_done = self._frames_tiled = 0
         self._t_full = self._t_tiles = 0.0
+        self._lag_sum, self._synced_n = 0.0, 0
         self._last_log = now
 
     def destroy_node(self):
         if self.events_csv is not None:
             self.events_csv.close()
         super().destroy_node()
+
+
+def _stamp_s(msg) -> float:
+    """header.stamp en segundos."""
+    s = msg.header.stamp
+    return s.sec + s.nanosec * 1e-9
 
 
 def main(args=None):

@@ -1,0 +1,4 @@
+# Salidas de Ultralytics y pesos descargados: no se versionan
+runs/
+*.pt
+__pycache__/

@@ -4,6 +4,7 @@
 Entradas:  /drone/gps (NavSatFix), /drone/pose (PoseStamped ENU),
            /yolo/person_alert (String JSON de person_detector, una por persona),
            /yolo/person_fix (mismo JSON, cada vez que mejora su posición)
+           /yolo/person_merge (dos marcas eran la misma persona: se borra una)
 Salidas (1 Hz):
   /drone/trail_geojson       foxglove_msgs/GeoJSON  <- panel Map: línea azul del
                              recorrido, punto verde = home, rojos = personas. El dron
@@ -13,6 +14,9 @@ Salidas (1 Hz):
 Web (web_map.py): http://<host>:<web_port>/ mapa de rescate en el navegador, con la
   lista de personas y sus coordenadas GPS. En SITL las coordenadas las simula
   Unreal (OriginGeopoint de AirSim); en el dron real, el GPS. web_port 0 = apagada.
+  Botón "Marcar aquí": agrega una marca manual (M1, M2...) en la posición del dron
+  en ese momento, p. ej. al ver a alguien en el FPV que el detector no marcó bien.
+  Es solo un punto en el mapa: no comanda al dron. web_marks: false lo desactiva.
 Archivos (cada save_period_sec y al cerrar), en output_dir/<fecha_hora>/:
   trail.geojson, trail.kml (Google Earth), trail.csv, personas.csv (una fila por
   persona: su lat/lon en el suelo y error, o la del dron si no se pudo ubicar)
@@ -24,6 +28,7 @@ La lógica (decimación, export) está en trail.py, testeada sin ROS.
 import json
 import math
 import os
+import queue
 import time
 from datetime import datetime
 
@@ -78,6 +83,11 @@ class TrailNode(Node):
         self.declare_parameter('web_port', 8081)        # mapa en el navegador; 0 = apagado
         self.declare_parameter('web_bind_address', '0.0.0.0')
         self.declare_parameter('web_live_rate_hz', 5.0)  # posición del dron en la web
+        # Botón "Marcar aquí" de la web (marca en la posición del dron). La página no
+        # tiene contraseña: cualquiera en la red puede agregar o borrar marcas manuales
+        # (nunca las del detector, y nunca comanda al dron).
+        self.declare_parameter('web_marks', True)
+        self._web_queue = queue.SimpleQueue()   # pedidos de la web -> hilo de ROS
 
         self.grid_step_m = float(self.get_parameter('grid_step_m').value)
         self.output_root = os.path.expanduser(self.get_parameter('output_dir').value)
@@ -102,7 +112,8 @@ class TrailNode(Node):
         self.create_subscription(NavSatFix, '/drone/gps', self._on_gps, 10)
         self.create_subscription(PoseStamped, '/drone/pose', self._on_pose, 10)
         self.create_subscription(String, '/yolo/person_alert', self._on_alert, 50)
-        self.create_subscription(String, '/yolo/person_fix', self._on_alert, 50)
+        self.create_subscription(String, '/yolo/person_fix', self._on_fix, 50)
+        self.create_subscription(String, '/yolo/person_merge', self._on_merge, 50)
         self.create_subscription(Int32, '/yolo/person_count', self._on_count, 10)
         self.create_service(Trigger, '/drone/trail/reset', self._on_reset)
 
@@ -115,13 +126,16 @@ class TrailNode(Node):
         self.web = None
         port = int(self.get_parameter('web_port').value)
         if port > 0:
+            marks = bool(self.get_parameter('web_marks').value)
             try:
-                self.web = MapServer(port, self.get_parameter('web_bind_address').value)
+                self.web = MapServer(port, self.get_parameter('web_bind_address').value,
+                                     on_post=self._on_web_post if marks else None)
             except OSError as exc:            # p.ej. puerto ocupado: el resto sigue igual
                 self.get_logger().error(f'No se pudo abrir el mapa web en :{port}: {exc}')
         if self.web is not None:
             live = float(self.get_parameter('web_live_rate_hz').value)
             self.create_timer(1.0 / max(live, 0.5), self._web_live)
+            self.create_timer(0.1, self._apply_web)
             self._web_state()
             self.get_logger().info(f'Mapa de rescate en http://localhost:{port}/')
 
@@ -156,6 +170,12 @@ class TrailNode(Node):
         self._in_view = (int(msg.data), time.monotonic())
 
     def _on_alert(self, msg: String):
+        self._add_spot(msg, fix=False)
+
+    def _on_fix(self, msg: String):
+        self._add_spot(msg, fix=True)
+
+    def _add_spot(self, msg: String, fix: bool):
         try:
             al = json.loads(msg.data)
         except ValueError:
@@ -166,8 +186,62 @@ class TrailNode(Node):
                                    f'mapa ({msg.data[:120]})')
             return
         self.trail.add_person(spot)
-        self.get_logger().info(f'Persona #{spot.id}: {spot.coords_text()}')
+        # Un fix llega hasta 1 vez/s por persona: a INFO taparía las alertas.
+        log = self.get_logger().debug if fix else self.get_logger().info
+        log(f'Persona #{spot.id}{" (mejor posición)" if fix else ""}: {spot.coords_text()}')
         self._web_state()                     # en la web, sin esperar al próximo tick
+
+    def _on_merge(self, msg: String):
+        try:
+            m = json.loads(msg.data)
+            rid, rt, keep = int(m['removed_id']), float(m['removed_t']), int(m['id'])
+        except (KeyError, TypeError, ValueError):
+            return
+        if self.trail.remove_person(rid, rt):
+            self.get_logger().info(f'Persona #{rid} era la #{keep}: se borra del mapa')
+            self._web_state()
+
+    # ------------------------------------------------------- marcas manuales
+    def _on_web_post(self, path, data):
+        """Hilo del servidor web: valida, encola y responde. No toca self.trail."""
+        if path == '/api/mark':
+            fix = self._fix                      # tupla: se lee entera (atómico)
+            if fix is None or time.monotonic() - fix[4] > 3.0:
+                return 409, {'error': 'sin GPS del dron: no se puede marcar'}
+            lat, lon = fix[0], fix[1]
+            # Reloj ROS, como el `t` de las personas del detector (stamp de la imagen).
+            t = self.get_clock().now().nanoseconds * 1e-9
+            self._web_queue.put(('add', t, lat, lon))
+            return 200, {'ok': True, 'lat': round(lat, 8), 'lon': round(lon, 8)}
+        if path == '/api/mark/delete':
+            try:
+                pid = int(data['id'])
+            except (KeyError, TypeError, ValueError):
+                return 400, {'error': 'falta "id"'}
+            if pid >= 0:
+                return 400, {'error': 'solo se borran marcas manuales'}
+            self._web_queue.put(('del', pid))
+            return 200, {'ok': True}
+        return 404, {'error': 'no existe'}
+
+    def _apply_web(self):
+        """Hilo de ROS: aplica los pedidos de la web."""
+        changed = False
+        while True:
+            try:
+                req = self._web_queue.get_nowait()
+            except queue.Empty:
+                break
+            if req[0] == 'add':
+                spot = self.trail.add_mark(*req[1:])
+                self.get_logger().warn(f'MARCA MANUAL {spot.label} en {spot.lat:.6f}, '
+                                       f'{spot.lon:.6f} (posición del dron)')
+                changed = True
+            elif req[0] == 'del' and self.trail.remove_mark(req[1]):
+                self.get_logger().info(f'Marca M{-req[1]} borrada desde la web')
+                changed = True
+        if changed:
+            self._publish()
 
     def _on_reset(self, request, response):
         self.save()
@@ -216,12 +290,15 @@ class TrailNode(Node):
     def save(self):
         if not self.trail.dirty or not self.trail.points:
             return
-        if self.flight_dir is None:
-            name = datetime.now().strftime('%Y%m%d_%H%M%S')
-            self.flight_dir = os.path.join(self.output_root, name)
-            os.makedirs(self.flight_dir, exist_ok=True)
-            self.get_logger().info(f'Guardando recorrido en {self.flight_dir}/')
         try:
+            # Dentro del try: sin permisos o con el disco lleno se avisa y se
+            # reintenta en el próximo guardado (también en el último, al cerrar).
+            if self.flight_dir is None:
+                name = datetime.now().strftime('%Y%m%d_%H%M%S')
+                d = os.path.join(self.output_root, name)
+                os.makedirs(d, exist_ok=True)
+                self.flight_dir = d
+                self.get_logger().info(f'Guardando recorrido en {self.flight_dir}/')
             d = self.flight_dir
             _write_atomic(os.path.join(d, 'trail.geojson'),
                           json.dumps(self.trail.to_geojson(), indent=1))
