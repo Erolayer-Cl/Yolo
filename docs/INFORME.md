@@ -6,7 +6,7 @@
 > marcas ✏️ indican redacción y análisis **del equipo**: es lo que se evalúa en la
 > defensa, y no lo puede reemplazar la IA (ver [DECLARACION_IA.md](DECLARACION_IA.md)).
 
-✏️ Integrantes · curso 02DSI243061 · sección · fecha
+Ignacio Ibañez, Gerardo González, Crsitofer Jeria · curso 02DSI243061 · sección · fecha
 
 ## Resumen
 
