@@ -6,7 +6,7 @@ y copiado en [`resultados/`](resultados/).
 
 | Nivel | Qué mide | Datos | Herramienta | Estado |
 |---|---|---|---|---|
-| 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 140 tests en verde |
+| 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 144 tests en verde |
 | 2. Detector | Cuántas personas encuentra y cuántas inventa | VisDrone test-dev, 1610 imágenes etiquetadas | `training/e3_evaluar.py` | ✅ hecho |
 | 3. Sistema en SITL | Si el punto del mapa cae donde está la persona | Vuelos en Unreal + posición real de cada actor | `scripts/verdad_sitl.py` | ⚠️ 4 vuelos, resultados malos de ubicación (ver abajo) |
 | 4. Dron real | Todo lo anterior con cámara y GPS reales | — | — | ❌ no hecho |
@@ -19,7 +19,7 @@ y copiado en [`resultados/`](resultados/).
 cd src/person_yolo && python3 -m pytest -q test
 ```
 
-Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (140 passed, 2026-11-10).
+Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (144 passed, 2026-11-12).
 
 | Archivo | Qué cubre, incluidos los casos límite |
 |---|---|
@@ -31,6 +31,7 @@ Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (140 passed, 2
 | `test_history.py` | Muestra del estado del dron más cercana al instante de la imagen; stamp que vuelve atrás (rosbag en loop) |
 | `test_trail.py`, `test_web_map.py` | Archivos KML/GeoJSON/CSV, marcas manuales, servidor web |
 | `test_overlay.py`, `test_model_path.py` | Dibujos del HUD; dónde se busca el peso |
+| `test_verdad_sitl.py` | Evaluador del SITL: puntos marcados a la vez van a personas distintas; en momentos distintos cuentan como duplicado |
 | `test_airsim_settings.py` | Que la cámara y el lidar de `sim/airsim/settings*.json` coincidan con `config/sitl.yaml` y `launch_sitl.sh` |
 
 ---
@@ -75,8 +76,9 @@ precisión-recall: [`img/pr_n_final.png`](resultados/img/pr_n_final.png),
 estilizado, ver [INSTALACION.md](INSTALACION.md) paso 5a) con 3 personas (actores
 `StaticMeshActor_1/3/4`) puestas en la escena. Al terminar, `verdad_sitl.py` le pide a AirSim la posición real de
 cada actor y la pasa a lat/lon con el mismo GPS simulado del dron. Después compara cada
-punto de `personas.csv` con la persona real más cercana. Un punto a más de 15 m de toda
-persona cuenta como falsa alarma.
+punto de `personas.csv` con la persona real más cercana. Excepción: los puntos marcados
+en el mismo instante se asignan uno a uno a personas distintas, porque el detector las vio
+a la vez. Un punto a más de 15 m de toda persona cuenta como falsa alarma.
 
 Reproducir sin Unreal, con los archivos guardados:
 
@@ -92,7 +94,7 @@ Datos de cada vuelo en [`resultados/sitl/`](resultados/sitl/): `personas.csv`, `
 | `20261110_145432` | `19a97cc` | 192 s / 3.7 m | 2 de 3 | 20 | 3 | 14 lejos de toda persona | mediana 11.6 m, máx 11.9 m | ±1.2–1.3 m |
 | `20261110_151145` | `f9fdb56` | sin despegar | 0 de 3 | 2 | 0 | 2 (falsas alarmas en tierra) | — | — |
 | `20261110_152146` | `f9fdb56` | 128 s / 33.2 m | 2 de 3 | 7 | 2 | 1 | mediana 11.8 m, máx 14.8 m | ±1.6–17.3 m |
-| `20261111_160740` | `fb9e3cb` | 573 s / 28.3 m | 2 de 3 | 14 (13 + 1 manual) | 2 | 4 (al aterrizar) | mediana 11.4 m, máx 14.6 m | ±2–4 m en los 4 cerca de una persona; ±2–12 m en los 9 ubicados |
+| `20261111_160740` | `fb9e3cb` | 573 s / 28.3 m | 3 de 3 | 14 (13 + 1 manual) | 1 | 4 (al aterrizar) | mediana 11.4 m, máx 14.6 m | ±2–4 m en los 4 cerca de una persona; ±2–12 m en los 9 ubicados |
 
 "Versión del código" es el último commit anterior a la hora del vuelo. Los tres primeros
 son anteriores a `b86618a` (fusión de posiciones y de duplicados); el cuarto ya la tiene.
@@ -105,6 +107,12 @@ de ese actor, todas las personas reales se corrían 61 m. Corregido: ahora usa l
 vehículo. Las posiciones reales de los vuelos 1–3 coinciden a menos de 1 m con las
 corregidas, así que sus informes siguen valiendo.
 
+Después se corrigió también la asignación. Antes, cada punto iba a la persona más cercana,
+aunque otro punto del mismo instante ya la tuviera. En el vuelo 4, los puntos 5, 6 y 7 se
+marcaron a la vez y eran 3 personas, pero el evaluador asignaba 5 y 7 a la misma. Con eso
+contaba 2 de 3 personas y 2 duplicados; ahora cuenta 3 de 3 y 1 duplicado. En los vuelos
+1–3 el resumen no cambia (solo cambia a qué persona va algún punto aproximado).
+
 **Lectura:**
 - **El error de ubicación está subestimado.** Con el dron a 33 m, el error real es de
   unos 12 m, y el sistema dice ±1.6–3.5 m en 4 de sus 6 puntos ubicados. En el vuelo 3 todos los
@@ -113,7 +121,7 @@ corregidas, así que sus informes siguen valiendo.
   ruido. `scripts/calibrar_geo.py` está hecho para medir ese error con un rosbag y la
   verdad de terreno. **Todavía no se corrió.** El vuelo 4 lo repite con el código
   actual: a ~25 m, error real de mediana 11.4 m contra ±2–4 m informados, y corrimiento
-  medio **+6.0 m al norte**, +2.4 m al este.
+  medio **+7.0 m al norte**, +4.7 m al este.
 - **Falsas alarmas lejanas con coordenada** (vuelo 4): los puntos 1–3 quedaron a 145–257 m
   de toda persona, con error informado de ±4–12 m. Se marcaron a 108–228 m del dron, donde
   una persona mide pocos píxeles. Qué objeto confundió el detector no se revisó (no hubo
@@ -122,10 +130,14 @@ corregidas, así que sus informes siguen valiendo.
   20–50 m pasa los 80° de incidencia (`max_incidence_deg`). Esas personas quedan
   "aproximadas" en la posición del dron y se repiten (14 de 20 puntos en el vuelo 1).
   Es el comportamiento diseñado, pero muestra que el sistema necesita altura para servir.
-- **Duplicados:** 2–3 por vuelo, también en el vuelo 4, que ya tiene la fusión de
-  duplicados de `b86618a` (`StaticMeshActor_3` quedó 3 veces). Las 3 personas están a
-  menos de 15 m entre sí, así que no se puede separar bien un duplicado de una persona
-  vecina. Hacen falta personas más separadas para medirlo.
+- **Duplicados:** 2–3 por vuelo en los vuelos 1–3; 1 en el vuelo 4, que ya tiene la
+  fusión de duplicados de `b86618a` (el punto 8, a 14.6 m de `StaticMeshActor_3`, marcado
+  9 s después). Las 3 personas están a menos de 15 m entre sí, así que no se puede separar
+  del todo un duplicado de una persona vecina. Hacen falta personas más separadas para
+  medirlo bien.
+- **Las 3 personas, distinguidas** (vuelo 4): el detector las vio a la vez en un mismo
+  cuadro (puntos 5, 6 y 7) y las marcó como 3 personas, aunque están a 8–10 m entre sí y el
+  error de ubicación es de ~11 m.
 - **Falsas alarmas en tierra** (vuelo 2): con el dron apoyado, el detector marcó 2
   personas inexistentes, con score 0.25 y 0.40. Son scores bajos, cerca del umbral de
   tiles (0.25).

@@ -9,7 +9,7 @@ Copias de salidas reales, para que estén versionadas: `training/runs/` y
 | Archivo | De dónde sale | Cuándo |
 |---|---|---|
 | `RESULTADOS.md`, `resultados.html`, `img/comparacion_metricas.png`, `img/recall_por_tamano.png`, `img/costo.png`, `img/curvas_entrenamiento.png` | `training/e5_resultados.py`: lee `runs/eval/resumen.json` y `runs/train/<run>/results.csv` y `ficha_modelo.json`; no escribe números a mano | 2026-11-11 |
-| `pytest.txt` | `cd src/person_yolo && python3 -m pytest -q test` | 2026-11-10 |
+| `pytest.txt` | `cd src/person_yolo && python3 -m pytest -q test` | 2026-11-12 |
 | `resumen.md`, `resumen.json` | `training/e3_evaluar.py` → `training/runs/eval/` | 2026-11-09/10 |
 | `ficha_n_final.json`, `ficha_s_final.json` | `training/e2_entrenar.py` → `runs/train/<run>/ficha_modelo.json`: datos, parámetros, entorno y métricas | 2026-11-09 |
 | `img/ejemplo_{coco,n_final,s_final}.jpg` | `runs/eval/ejemplos_sitl_<modelo>/9999938_00000_d_0000279.jpg` (VisDrone test-dev). Verde = encontrada, rojo = no encontrada, amarillo = falsa alarma | 2026-11-10 |

@@ -2,7 +2,7 @@ Vuelo: docs/resultados/sitl/20261110_152146 (verdad.csv guardado, sin AirSim)
 
 Personas reales: 3 | puntos marcados: 7
 
-  # estado  persona real más cercana     error real     dice  
+  # estado  persona real asignada        error real     dice  
   1 GPS     StaticMeshActor_1                54.9 m     ±4 m  FALSA ALARMA o muy mal ubicada
   2 GPS     StaticMeshActor_3                 9.9 m     ±2 m  error MAYOR al que dice
   3 GPS     StaticMeshActor_3                14.8 m     ±9 m  ok

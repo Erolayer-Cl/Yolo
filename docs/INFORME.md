@@ -97,8 +97,8 @@ RESULTADOS.md da una explicación.
 - Vuelos contra la verdad de terreno de Unreal: [VALIDACION §3](VALIDACION.md#3-sistema-completo-en-sitl-contra-la-verdad-de-terreno).
   El error real es de ~12 m, mientras el sistema informa ±1.6–3.5 m; hay un sesgo de
   +9 m al norte. El vuelo 4 (`20261111_160740`, código actual, ~25 m) lo confirma:
-  mediana 11.4 m contra ±2–4 m informados, sesgo +6.0 m al norte, 2 de 3 personas,
-  2 duplicados y 3 falsas alarmas lejanas.
+  mediana 11.4 m contra ±2–4 m informados, sesgo +7.0 m al norte, 3 de 3 personas,
+  1 duplicado y 3 falsas alarmas lejanas.
 - ✏️ Conectar cada resultado con su objetivo de la sección 1: qué se cumplió, qué no y
   por qué.
 

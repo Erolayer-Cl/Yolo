@@ -25,6 +25,7 @@ Supone personas quietas: la posición es la de cuando corre el script.
 import argparse
 import collections
 import csv
+import itertools
 import json
 import math
 import os
@@ -107,13 +108,41 @@ def ultimo_vuelo():
     return vuelos[-1].parent if vuelos else None
 
 
+def _asignar_juntos(grupo, verdad):
+    """Puntos marcados en el MISMO instante = personas distintas (el detector las vio
+    a la vez en el mismo cuadro): se asignan uno a uno a personas reales distintas,
+    con la menor distancia total. Si hay más puntos que personas, los que sobran van
+    a la más cercana (son falsas alarmas o duplicados de verdad)."""
+    k, n = len(grupo), len(verdad)
+    dist = [[haversine_m(p['lat'], p['lon'], la, lo) for _, la, lo in verdad] for p in grupo]
+    if k > 7:                          # no pasa en la práctica; evita la explosión
+        return [min(range(n), key=lambda j: dist[i][j]) for i in range(k)]
+    sin = 1e6                          # costo de dejar un punto sin persona propia
+    mejor, asig = None, None
+    for perm in itertools.permutations(list(range(n)) + [None] * k, k):
+        costo = sum(sin if j is None else dist[i][j] for i, j in enumerate(perm))
+        if mejor is None or costo < mejor:
+            mejor, asig = costo, perm
+    return [min(range(n), key=lambda j: dist[i][j]) if j is None else j
+            for i, j in enumerate(asig)]
+
+
 def comparar(verdad, puntos):
-    """Para cada punto, la persona real más cercana y la distancia."""
-    filas = []
-    for pt in puntos:
-        d, quien = min((haversine_m(pt['lat'], pt['lon'], lat, lon), nombre)
-                       for nombre, lat, lon in verdad)
-        filas.append({**pt, 'real': quien, 'err_real': d})
+    """Para cada punto, la persona real que le corresponde y la distancia.
+
+    Puntos del mismo instante: asignación uno a uno (ver _asignar_juntos). El resto:
+    la persona más cercana, así una persona marcada dos veces en momentos distintos
+    sigue contando como duplicado."""
+    grupos = collections.defaultdict(list)
+    for i, pt in enumerate(puntos):
+        grupos[pt['t'] if pt['t'] is not None and not pt['manual'] else ('solo', i)].append(i)
+    filas = [None] * len(puntos)
+    for idx in grupos.values():
+        grupo = [puntos[i] for i in idx]
+        for i, j in zip(idx, _asignar_juntos(grupo, verdad)):
+            nombre, lat, lon = verdad[j]
+            filas[i] = {**puntos[i], 'real': nombre,
+                        'err_real': haversine_m(puntos[i]['lat'], puntos[i]['lon'], lat, lon)}
     return filas
 
 
@@ -127,6 +156,7 @@ def leer_puntos(vuelo):
                 continue
             manual = r.get('manual') in ('1', 'True', 'true')
             out.append({'id': r['id'], 'lat': float(lat), 'lon': float(lon),
+                        't': r.get('t') or None,
                         'ubicada': ubicada, 'manual': manual,
                         'error_m': float(r['error_m']) if ubicada and r['error_m'] else None})
         return out
@@ -134,7 +164,7 @@ def leer_puntos(vuelo):
 
 def informe(verdad, filas):
     print(f'\nPersonas reales: {len(verdad)} | puntos marcados: {len(filas)}\n')
-    print(f'{"#":>3} {"estado":7} {"persona real más cercana":28} {"error real":>10} '
+    print(f'{"#":>3} {"estado":7} {"persona real asignada":28} {"error real":>10} '
           f'{"dice":>8}  ')
     for r in filas:
         dice = f'±{r["error_m"]:.0f} m' if r['error_m'] is not None else 'dron'

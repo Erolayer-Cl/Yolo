@@ -2,11 +2,11 @@ Vuelo: docs/resultados/sitl/20261110_145432 (verdad.csv guardado, sin AirSim)
 
 Personas reales: 3 | puntos marcados: 20
 
-  # estado  persona real más cercana     error real     dice  
+  # estado  persona real asignada        error real     dice  
   1 aprox   StaticMeshActor_3                32.0 m     dron  aprox: lejos de toda persona
   2 GPS     StaticMeshActor_3                28.0 m     ±1 m  FALSA ALARMA o muy mal ubicada
   3 aprox   StaticMeshActor_3                29.5 m     dron  aprox: lejos de toda persona
-  4 aprox   StaticMeshActor_3                29.5 m     dron  aprox: lejos de toda persona
+  4 aprox   StaticMeshActor_4                33.3 m     dron  aprox: lejos de toda persona
   5 aprox   StaticMeshActor_3                55.8 m     dron  aprox: lejos de toda persona
   6 aprox   StaticMeshActor_3                56.0 m     dron  aprox: lejos de toda persona
   7 aprox   StaticMeshActor_3                56.4 m     dron  aprox: lejos de toda persona
@@ -16,7 +16,7 @@ Personas reales: 3 | puntos marcados: 20
  11 GPS     StaticMeshActor_1                 1.6 m     ±1 m  ok
  12 aprox   StaticMeshActor_4                 4.3 m     dron  aprox: cerca de una persona
  13 aprox   StaticMeshActor_1                37.2 m     dron  aprox: lejos de toda persona
- 14 aprox   StaticMeshActor_1                37.2 m     dron  aprox: lejos de toda persona
+ 14 aprox   StaticMeshActor_4                41.0 m     dron  aprox: lejos de toda persona
  15 aprox   StaticMeshActor_4                19.4 m     dron  aprox: lejos de toda persona
  16 GPS     StaticMeshActor_1                11.9 m     ±1 m  error MAYOR al que dice
  17 GPS     StaticMeshActor_4                11.6 m     ±1 m  error MAYOR al que dice
