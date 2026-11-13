@@ -115,17 +115,18 @@ verificó y qué decidió el equipo.
 
 ## 4. Reparto
 
-✏️ Cada integrante debe poder abrir y explicar su parte sin mirar la respuesta.
+Según el reparto de la presentación. Cada integrante debe poder abrir y explicar su parte sin mirar la respuesta.
 
 | Área | Archivos | Responsable |
 |---|---|---|
-| Problema, alcance, riesgos | README, RIESGOS_Y_ETICA | ✏️ |
-| Datos y entrenamiento | `training/`, RESULTADOS | ✏️ |
-| Detección: YOLO, tiling, fusión | `inference.py`, `tiling.py` | ✏️ |
-| Conteo y waypoints | `tracker.py`, `persons.py` | ✏️ |
-| Geolocalización | `geolocate.py`, `gps_node.py` | ✏️ |
-| Integración ROS 2, mapa y web | nodos, `trail.py`, `web_map.py`, launch | ✏️ |
-| Validación SITL | `verdad_sitl.py`, VALIDACION | ✏️ |
+| Problema y alcance | README | Cristofer Jeria |
+| Riesgos, limitaciones y conclusiones | RIESGOS_Y_ETICA | Ignacio Ibañez |
+| Datos y entrenamiento | `training/`, RESULTADOS | Gerardo González |
+| Detección: YOLO, tiling, fusión | `inference.py`, `tiling.py` | Gerardo González |
+| Conteo y waypoints | `tracker.py`, `persons.py` | Cristofer Jeria |
+| Geolocalización | `geolocate.py`, `gps_node.py` | Ignacio Ibañez |
+| Integración ROS 2, mapa y web | nodos, `trail.py`, `web_map.py`, launch | Cristofer Jeria |
+| Validación SITL | `verdad_sitl.py`, VALIDACION | Ignacio Ibañez |
 
 ## 5. Antes de entregar
 

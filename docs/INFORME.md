@@ -6,7 +6,7 @@
 > marcas ✏️ indican redacción y análisis **del equipo**: es lo que se evalúa en la
 > defensa, y no lo puede reemplazar la IA (ver [DECLARACION_IA.md](DECLARACION_IA.md)).
 
-Ignacio Ibañez, Gerardo González, Crsitofer Jeria · DES SOLUC INTELIGENTES [LAB 1] · 13-11-2026
+Ignacio Ibañez, Gerardo González, Cristofer Jeria · DES SOLUC INTELIGENTES [LAB 1] · 13-11-2026
 
 ## Resumen
 
