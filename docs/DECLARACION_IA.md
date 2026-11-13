@@ -77,8 +77,12 @@ Decisiones que tomó el equipo y no la IA:
 - El problema a resolver y el alcance (vuelo manual, solo mirar, nunca comandar al dron).
 - Usar VisDrone y reentrenar en lugar de quedarse con COCO.
 - Entrenar dos modelos (`n` y `s`) y compararlos en lugar de uno solo: más esfuerzo,
-  pero para elegir con evidencia y obtener mejores resultados. También se preparó un
-  tuning de hiperparámetros (`training/extra_tuning.py`), que no se llegó a ejecutar.
+  pero para elegir con evidencia y obtener mejores resultados.
+- Revisar los hiperparámetros del entrenamiento (`training/e2_entrenar.py`: tamaño de
+  imagen 640 igual al de los tiles y la Jetson, batch 8 por la memoria de la GPU, 50
+  épocas, misma semilla en todos los runs). Las pruebas automáticas de tuning, cambiando
+  un hiperparámetro a la vez (`training/extra_tuning.py`), quedaron preparadas pero no
+  se ejecutaron por el tiempo que lleva cada entrenamiento.
 - Elegir `n_final` para la Jetson.
 - El hardware (Jetson Orin NX, lidar), la escena de Unreal y la colocación de las personas.
 
