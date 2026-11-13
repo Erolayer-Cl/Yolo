@@ -61,7 +61,7 @@ mapa en vivo y en archivos después del vuelo.
 | SITL con PX4 1.17 + Unreal/Cosys-AirSim; mismo código preparado para Jetson Orin NX | Validación en el dron real (todavía no se voló, ver [docs/VALIDACION.md](docs/VALIDACION.md)) |
 
 **Estado al 2026-11-10.**
-- ✅ SITL completo funcionando, 152 tests en verde.
+- ✅ SITL completo funcionando, 153 tests en verde.
 - ✅ Detector reentrenado: 4× más recall que COCO en VisDrone.
 - ⚠️ Error de ubicación en SITL de ~12 m, subestimado por el sistema. Pendiente calibrar.
 - ❌ Sin vuelo real.
@@ -361,6 +361,11 @@ sin instalar nada y sin internet. Muestra:
   van a la tabla, a `personas.csv` (`manual` = 1) y a `/rescue/waypoints`; **Borrar** en su
   fila la quita. Solo marca el mapa: **no comanda al dron**. Sin GPS del dron el botón se
   desactiva. Cualquiera en la red puede usarlo; `trail_node.web_marks: false` lo apaga.
+- **Borrar punto** (arriba, o tecla **Supr**): borra el punto elegido (tocarlo en el mapa o
+  en la tabla), sea una marca manual o un punto del detector, p. ej. una falsa alarma. Pide
+  confirmación y no se puede deshacer. Un punto del detector borrado no vuelve aunque llegue
+  otro fix suyo; si la persona se vuelve a detectar después como nueva, aparece con otro
+  número. También hay un **Borrar** en cada fila. `web_marks: false` lo apaga igual.
 
 Las coordenadas son las del GPS: en SITL las simula Unreal (`OriginGeopoint` de AirSim), así que
 el mapa de calles no coincide con el escenario; en el dron real son las de la Pixhawk. La página

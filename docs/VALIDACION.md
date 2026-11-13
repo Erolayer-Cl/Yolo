@@ -6,7 +6,7 @@ y copiado en [`resultados/`](resultados/).
 
 | Nivel | Qué mide | Datos | Herramienta | Estado |
 |---|---|---|---|---|
-| 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 152 tests en verde |
+| 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 153 tests en verde |
 | 2. Detector | Cuántas personas encuentra y cuántas inventa | VisDrone test-dev, 1610 imágenes etiquetadas | `training/e3_evaluar.py` | ✅ hecho |
 | 3. Sistema en SITL | Si el punto del mapa cae donde está la persona | Vuelos en Unreal + posición real de cada actor | `scripts/verdad_sitl.py` | ⚠️ 4 vuelos, resultados malos de ubicación (ver abajo) |
 | 4. Dron real | Todo lo anterior con cámara y GPS reales | — | — | ❌ no hecho |
@@ -19,7 +19,7 @@ y copiado en [`resultados/`](resultados/).
 cd src/person_yolo && python3 -m pytest -q test
 ```
 
-Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (152 passed, 2026-11-13).
+Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (153 passed, 2026-11-13).
 
 | Archivo | Qué cubre, incluidos los casos límite |
 |---|---|

@@ -193,6 +193,15 @@ class Trail:
         self.dirty = self.dirty or len(self.persons) != n
         return len(self.persons) != n
 
+    def remove_detected(self, pid: int, t: float, tol: float = 0.01) -> bool:
+        """Borra a mano (botón "Borrar punto" de la web) un punto del detector, p. ej.
+        una falsa alarma. `t` llega redondeado desde la web: se busca con `tol`.
+        Como en un merge, queda recordado y un fix posterior no lo vuelve a crear."""
+        for p in self.persons:
+            if not p.manual and p.id == pid and abs(p.t - t) <= tol:
+                return self.remove_person(p.id, p.t)
+        return False
+
     def add_mark(self, t: float, lat: float, lon: float) -> PersonSpot:
         """Marca a mano en la posición del dron (botón de la web)."""
         self.marks_n += 1
