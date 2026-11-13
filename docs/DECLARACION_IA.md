@@ -1,8 +1,7 @@
 # Declaración de uso de IA generativa
 
-> **Para completar por el equipo.** Las secciones marcadas con ✏️ las tiene que escribir
-> el equipo: solo ustedes saben qué decidieron, qué revisaron y qué cambiaron. Lo
-> demás sale del historial de git y se puede verificar.
+> Las secciones de verificación, decisiones y cambios humanos las escribió el equipo.
+> Lo demás sale del historial de git y se puede verificar.
 
 ## Equipo
 
@@ -64,28 +63,36 @@ Lo verificable desde el repo:
 - Las licencias de terceros se revisaron en sus repositorios oficiales
   ([RIESGOS_Y_ETICA.md](RIESGOS_Y_ETICA.md) §6).
 
-✏️ Lo que revisó o probó el equipo (ejemplos: "volamos el SITL después de cada cambio",
-"revisamos los números del informe contra resumen.md", "probamos la web desde el
-celular"):
+Lo que revisó o probó el equipo:
 
-- ✏️
-- ✏️
+- Volamos el SITL en cada prueba, revisando que el sistema detectara a las personas.
+- Revisamos el recall de las cajas (*bounding boxes*) de cada modelo.
+- Comparamos los puntos marcados en el mapa con la posición real de las personas en el
+  mapa de Unreal, usando los archivos de verificación (`verdad.csv`, `verdad.geojson`,
+  `informe.txt` en `docs/resultados/sitl/`).
 
 ## Decisiones y cambios humanos
 
-✏️ Decisiones que tomó el equipo y no la IA. Ejemplos a confirmar o corregir:
+Decisiones que tomó el equipo y no la IA:
 - El problema a resolver y el alcance (vuelo manual, solo mirar, nunca comandar al dron).
 - Usar VisDrone y reentrenar en lugar de quedarse con COCO.
+- Entrenar dos modelos (`n` y `s`) y compararlos en lugar de uno solo: más esfuerzo,
+  pero para elegir con evidencia y obtener mejores resultados. También se preparó un
+  tuning de hiperparámetros (`training/extra_tuning.py`), que no se llegó a ejecutar.
 - Elegir `n_final` para la Jetson.
 - El hardware (Jetson Orin NX, lidar), la escena de Unreal y la colocación de las personas.
 
-✏️ Propuestas de la IA que el equipo rechazó o cambió:
+Propuestas que el equipo rechazó o cambió:
 
-- ✏️
+- **Radar para detectar la cercanía de las personas.** Se descartó: el radar funciona
+  bien con blancos en el aire (aviones, drones, aves), pero es ineficiente para
+  distinguir personas en tierra.
+- **`entrega_eval01.zip`** (ver arriba): revisado y no aplicado.
 
 ## Límites
 
 - La IA puede equivocarse con seguridad. Por eso cada cifra de la documentación apunta
   a un archivo generado por una ejecución, y lo no validado se marca como tal.
-- ✏️ Cómo aseguró el equipo entender lo que usa (para la defensa): qué partes puede
-  explicar cada integrante.
+- Para entender lo que usa, el equipo revisó y preguntó cómo funciona cada nodo y cómo
+  se relaciona con sus tópicos de ROS 2. Qué parte explica cada integrante:
+  [DEFENSA.md](DEFENSA.md) §4.
