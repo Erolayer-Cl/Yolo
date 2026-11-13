@@ -8,11 +8,11 @@
 
 Integrantes y aporte principal de cada uno:
 
-| Integrante | Usuario de git | Aporte principal |
-|---|---|---|
-| Ignacio Ibañez | `Erolayer_CL`, `Ignacio Ibañez` | Programador: código del sistema y pruebas en la simulación de vuelo (SITL) |
-| Gerardo González | `Gerardo González` | Entrenamiento del modelo que detecta personas: datos, entrenamiento y resultados |
-| Cristofer Jeria | — | Mapa y alertas: cómo funciona el sistema completo (arquitectura) |
+| Integrante | Aporte principal |
+|---|---|
+| Ignacio Ibañez | Programador: código del sistema y pruebas en la simulación de vuelo (SITL) |
+| Gerardo González | Entrenamiento del modelo que detecta personas: datos, entrenamiento y resultados |
+| Cristofer Jeria | Mapa y alertas: cómo funciona el sistema completo (arquitectura) |
 
 ## Herramienta usada
 
@@ -21,8 +21,9 @@ Integrantes y aporte principal de cada uno:
 
 ## Alcance del uso (verificable en git)
 
-**Los 13 commits del repo** (`git log`, del 2026-10-28 al 2026-11-10) tienen el trailer
-`Co-Authored-By: Claude Opus 5.5`. Es decir: el uso fue **material** y abarca todo el
+**21 de los 25 commits del repo** (`git log --no-merges`, del 2026-10-28 al 2026-11-12)
+tienen el trailer `Co-Authored-By: Claude Opus 5.5`; los otros 4 son ediciones de
+documentación hechas a mano en GitHub. Es decir: el uso fue **material** y abarca todo el
 código. Para verlo:
 
 ```bash
@@ -54,7 +55,7 @@ En qué se usó:
 ## Cómo se verificó lo que produjo la IA
 
 Lo verificable desde el repo:
-- 144 tests unitarios en verde (`docs/resultados/pytest.txt`).
+- 152 tests unitarios en verde (`docs/resultados/pytest.txt`).
 - Evaluación en VisDrone test-dev con el mismo `detect_persons()` que corre en vuelo
   (sin una copia aparte).
 - Vuelos en SITL comparados con la posición real de las personas (`verdad_sitl.py`). Esa
