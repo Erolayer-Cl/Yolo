@@ -6,13 +6,13 @@
 
 ## Equipo
 
-✏️ Integrantes y aporte principal de cada uno:
+Integrantes y aporte principal de cada uno:
 
 | Integrante | Usuario de git | Aporte principal |
 |---|---|---|
-| ✏️ | `Erolayer_CL` | ✏️ |
-| ✏️ Ignacio Ibañez | `Ignacio Ibañez` | ✏️ |
-| ✏️ Gerardo González| gerardogonzalez0264| ✏️Análisis de datos|
+| Ignacio Ibañez | `Erolayer_CL`, `Ignacio Ibañez` | Programador: código del sistema y pruebas en la simulación de vuelo (SITL) |
+| Gerardo González | `Gerardo González` | Entrenamiento del modelo que detecta personas: datos, entrenamiento y resultados |
+| Cristofer Jeria | — | Mapa y alertas: cómo funciona el sistema completo (arquitectura) |
 
 ## Herramienta usada
 
