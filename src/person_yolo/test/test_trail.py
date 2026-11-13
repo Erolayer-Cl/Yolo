@@ -257,6 +257,23 @@ def test_merged_person_is_removed_but_not_manual_marks():
     assert [p.label for p in tr.persons] == ['1', 'M1']
 
 
+def test_detected_point_deleted_from_web_stays_deleted():
+    tr = Trail()
+    tr.add(pt(0.0))
+    a, b = person(1), person(2)
+    tr.add_person(a)
+    tr.add_person(b)
+    m = tr.add_mark(5.0, LAT0, LON0)
+    t_web = round(b.t, 2)                          # la web manda t redondeado
+    assert not tr.remove_detected(2, t_web + 1.0)  # otro t: otra persona
+    assert not tr.remove_detected(m.id, m.t)       # las marcas van por remove_mark
+    assert tr.remove_detected(2, t_web)
+    assert [p.label for p in tr.persons] == ['1', 'M1']
+    tr.add_person(person(2))                       # un fix posterior no la recrea
+    assert [p.label for p in tr.persons] == ['1', 'M1']
+    assert not tr.remove_detected(2, t_web)        # ya no está
+
+
 def test_late_fix_does_not_recreate_merged_person():
     tr = Trail()
     tr.add(pt(0.0))

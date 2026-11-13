@@ -17,6 +17,9 @@ Web (web_map.py): http://<host>:<web_port>/ mapa de rescate en el navegador, con
   Botón "Marcar aquí": agrega una marca manual (M1, M2...) en la posición del dron
   en ese momento, p. ej. al ver a alguien en el FPV que el detector no marcó bien.
   Es solo un punto en el mapa: no comanda al dron. web_marks: false lo desactiva.
+  Botón "Borrar punto": borra el punto elegido (marca manual o punto del detector,
+  p. ej. una falsa alarma). Un punto del detector borrado no vuelve aunque llegue
+  otro fix suyo. También lo desactiva web_marks: false.
 Archivos (cada save_period_sec y al cerrar), en output_dir/<fecha_hora>/:
   trail.geojson, trail.kml (Google Earth), trail.csv, personas.csv (una fila por
   persona: su lat/lon en el suelo y error, o la del dron si no se pudo ubicar)
@@ -218,9 +221,16 @@ class TrailNode(Node):
                 pid = int(data['id'])
             except (KeyError, TypeError, ValueError):
                 return 400, {'error': 'falta "id"'}
-            if pid >= 0:
-                return 400, {'error': 'solo se borran marcas manuales'}
-            self._web_queue.put(('del', pid))
+            if pid < 0:                          # marca manual
+                self._web_queue.put(('del', pid))
+                return 200, {'ok': True}
+            try:                                 # punto del detector: (id, t)
+                t = float(data['t'])
+            except (KeyError, TypeError, ValueError):
+                return 400, {'error': 'falta "t" del punto'}
+            if not math.isfinite(t):
+                return 400, {'error': '"t" inválido'}
+            self._web_queue.put(('del_det', pid, t))
             return 200, {'ok': True}
         return 404, {'error': 'no existe'}
 
@@ -239,6 +249,9 @@ class TrailNode(Node):
                 changed = True
             elif req[0] == 'del' and self.trail.remove_mark(req[1]):
                 self.get_logger().info(f'Marca M{-req[1]} borrada desde la web')
+                changed = True
+            elif req[0] == 'del_det' and self.trail.remove_detected(req[1], req[2]):
+                self.get_logger().warn(f'Punto #{req[1]} del detector borrado desde la web')
                 changed = True
         if changed:
             self._publish()

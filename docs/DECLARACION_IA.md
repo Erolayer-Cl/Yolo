@@ -54,7 +54,7 @@ En qué se usó:
 ## Cómo se verificó lo que produjo la IA
 
 Lo verificable desde el repo:
-- 152 tests unitarios en verde (`docs/resultados/pytest.txt`).
+- 153 tests unitarios en verde (`docs/resultados/pytest.txt`).
 - Evaluación en VisDrone test-dev con el mismo `detect_persons()` que corre en vuelo
   (sin una copia aparte).
 - Vuelos en SITL comparados con la posición real de las personas (`verdad_sitl.py`). Esa

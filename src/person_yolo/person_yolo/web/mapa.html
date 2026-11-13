@@ -92,6 +92,9 @@
            background: var(--manual); color: #fff; font: 700 14px system-ui, sans-serif;
            cursor: pointer; }
   #bMark:disabled { opacity: .45; cursor: not-allowed; }
+  #bDel { height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid #c0392b;
+          background: transparent; color: #c0392b; font-weight: 600; cursor: pointer; }
+  #bDel:disabled { opacity: .45; cursor: not-allowed; }
   #toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
            max-width: 90%; padding: 8px 14px; border-radius: 8px; font-weight: 600;
            background: var(--panel); color: var(--text); border: 1px solid var(--line);
@@ -120,6 +123,7 @@
   <span id="status">Conectando…</span>
   <span id="drone">Dron: sin datos</span>
   <button id="bMark" disabled title="Agregar una marca en la posición del dron AHORA (tecla M). Solo marca el mapa: no mueve el dron.">Marcar aquí</button>
+  <button id="bDel" disabled title="Borrar el punto elegido (tocarlo en el mapa o en la tabla), p. ej. una falsa alarma (tecla Supr)">Borrar punto</button>
 </header>
 <section class="stats" aria-label="Conteo de personas">
   <div class="stat total"><div class="v" id="nTotal">0</div><div class="k">Personas vistas</div></div>
@@ -448,6 +452,7 @@ function pick(x, y) {
 }
 function select(id, scroll) {
   selected = id;
+  $('bDel').disabled = id === null;
   document.querySelectorAll('#rows tr[data-id]').forEach(tr => tr.classList.toggle('sel', +tr.dataset.id === id));
   if (scroll && id !== null) {
     const tr = document.querySelector(`#rows tr[data-id="${id}"]`);
@@ -591,7 +596,8 @@ function renderRows() {
         return `<tr class="${cls}" data-id="${p.id}" title="Sin coordenadas de la persona: se marcó donde estaba el dron (${p.drone_lat.toFixed(6)}, ${p.drone_lon.toFixed(6)}). Volver a pasar sobre esa zona.">
           <td><b>${p.id}</b></td><td><span class="badge aprox">Aprox.</span></td>
           <td class="mono muted">${p.drone_lat.toFixed(6)}</td><td class="mono muted">${p.drone_lon.toFixed(6)}</td>
-          <td class="muted">dron</td><td class="muted">${esc(toDrone(p))}</td><td class="muted">${esc(hora(p.t))}</td><td></td></tr>`;
+          <td class="muted">dron</td><td class="muted">${esc(toDrone(p))}</td><td class="muted">${esc(hora(p.t))}</td>
+          <td><button data-del="${p.id}" title="Borrar este punto">Borrar</button></td></tr>`;
       }
       const coords = `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
       const err = p.error_m != null ? `±${p.error_m.toFixed(1)} m` : '';
@@ -599,7 +605,8 @@ function renderRows() {
         <td><b>${p.id}</b></td><td><span class="badge ubic">GPS</span></td>
         <td class="mono">${p.lat.toFixed(6)}</td><td class="mono">${p.lon.toFixed(6)}</td>
         <td>${esc(err)}</td><td>${esc(toDrone(p))}</td><td class="muted">${esc(hora(p.t))}</td>
-        <td><button data-copy="${coords}" title="Copiar latitud, longitud">Copiar</button></td></tr>`;
+        <td><button data-copy="${coords}" title="Copiar latitud, longitud">Copiar</button>
+            <button data-del="${p.id}" title="Borrar este punto (p. ej. una falsa alarma)">Borrar</button></td></tr>`;
     }).join('');
   }
   if (html !== lastRows) {               // sin cambios no se rehace: no se pierde el "Copiado"
@@ -627,7 +634,7 @@ $('rows').addEventListener('click', ev => {
   const btn = ev.target.closest('button[data-copy]');
   if (btn) { ev.stopPropagation(); copyText(btn.dataset.copy, btn); return; }
   const del = ev.target.closest('button[data-del]');
-  if (del) { ev.stopPropagation(); deleteMark(+del.dataset.del); return; }
+  if (del) { ev.stopPropagation(); deletePoint(+del.dataset.del); return; }
   const tr = ev.target.closest('tr[data-id]');
   if (!tr) return;
   const p = state.persons.find(q => q.id === +tr.dataset.id);
@@ -667,16 +674,26 @@ async function markHere() {
   }
   setTimeout(() => { markPending = false; b.disabled = !gpsOk(); }, 600);   // evita dobles clics
 }
-async function deleteMark(id) {
+async function deletePoint(id) {
   const p = state && state.persons.find(q => q.id === id);
-  if (!p || !confirm(`¿Borrar la marca ${p.etiqueta}?`)) return;
-  try { await postJSON('/api/mark/delete', { id }); setTimeout(refreshState, 300); }
-  catch (e) { toast('No se pudo borrar: ' + e.message, true); }
+  if (!p) return;
+  const what = p.manual ? `la marca ${p.etiqueta}`
+    : `el punto #${p.id} (${p.ubicada ? 'GPS' : 'aproximado'}) del detector`;
+  if (!confirm(`¿Borrar ${what}?\nNo se puede deshacer.`)) return;
+  try {
+    await postJSON('/api/mark/delete', p.manual ? { id } : { id, t: p.t });
+    toast(`Borrado: ${what}`);
+    if (selected === id) select(null, false);
+    setTimeout(refreshState, 300);
+  } catch (e) { toast('No se pudo borrar: ' + e.message, true); }
 }
+$('bDel').onclick = () => { if (selected !== null) deletePoint(selected); };
 $('bMark').onclick = markHere;
 window.addEventListener('keydown', ev => {
   if ((ev.key === 'm' || ev.key === 'M') && !ev.ctrlKey && !ev.metaKey && !ev.altKey
       && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) markHere();
+  if ((ev.key === 'Delete' || ev.key === 'Supr') && selected !== null
+      && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) deletePoint(selected);
 });
 
 // ---------------------------------------------------------------- datos
@@ -697,6 +714,7 @@ function onState(s) {
     }
   }
   gotState = true;
+  if (selected !== null && !s.persons.some(p => p.id === selected)) select(null, false);
   if (home && !fitted && W) { fitted = true; follow ? setFollow(true) : fitAll(); }
   renderStats();
   renderRows();
