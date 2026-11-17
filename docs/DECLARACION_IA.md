@@ -12,7 +12,7 @@
 |---|---|---|
 | ✏️ | `Erolayer_CL` | ✏️ |
 | ✏️ Ignacio Ibañez | `Ignacio Ibañez` | ✏️ |
-| ✏️ Gerardo González| gerardogonzalez0264| ✏️Análisis de datos|
+| ✏️ Gerardo González| gerardogonzalez0264| ✏️Entrenamiento del modelo|
 
 ## Herramienta usada
 
