@@ -74,8 +74,11 @@ lat/lon. Rayos más rasantes que `max_incidence_deg: 80` no se ubican y quedan
 aproximados (`geolocate.locate`).
 
 **¿Qué tan bien ubica?** En el vuelo 4 (código actual, COCO) el error real tuvo una
-mediana de 11,4 m (máximo 14,6 m), con un corrimiento medio de +7,0 m al norte
-(`docs/resultados/sitl/20261111_160740/informe.txt`).
+mediana de 9,4 m en los 4 puntos a 15 m o menos de una persona (máximo 14,6 m), con un
+corrimiento medio de +7,0 m al norte. Con los 9 puntos ubicados, incluidas las falsas
+alarmas, la mediana es 37,4 m (`docs/resultados/sitl/20261111_160740/informe.txt`).
+Antes del 26-11 el script informaba 11,4 m: tomaba el central de arriba con una cantidad
+par de datos ([VALIDACION.md](VALIDACION.md) §3).
 
 **¿Es confiable el `±m` que muestra?** No todavía. La persona real cayó dentro de la zona
 de 2σ en 0 de 4 puntos ubicados en el vuelo 4, y en 2 de 4 en los vuelos `145432` y

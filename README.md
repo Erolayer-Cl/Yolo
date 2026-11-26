@@ -60,10 +60,10 @@ mapa en vivo y en archivos después del vuelo.
 | Reentrenamiento con VisDrone y evaluación ([`training/`](training/README.md)) | Grabar video (no se graba; solo un rosbag si alguien lo pide a mano) |
 | SITL con PX4 1.17 + Unreal/Cosys-AirSim; mismo código preparado para Jetson Orin NX | Validación en el dron real (todavía no se voló, ver [docs/VALIDACION.md](docs/VALIDACION.md)) |
 
-**Estado al 2026-11-10.**
-- ✅ SITL completo funcionando, 153 tests en verde.
+**Estado al 2026-11-26.**
+- ✅ SITL completo funcionando, 154 tests en verde.
 - ✅ Detector reentrenado: 4× más recall que COCO en VisDrone.
-- ⚠️ Error de ubicación en SITL de ~12 m, subestimado por el sistema. Pendiente calibrar.
+- ⚠️ Error de ubicación en SITL de 7–11 m de mediana (puntos cerca de una persona), subestimado por el sistema. Pendiente calibrar.
 - ❌ Sin vuelo real.
 
 ## Documentación

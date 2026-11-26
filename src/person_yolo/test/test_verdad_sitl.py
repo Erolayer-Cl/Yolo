@@ -49,6 +49,19 @@ def test_dentro_de_2sigma_cuenta_solo_ubicados_del_detector():
     assert verdad_sitl.dentro_de_2sigma([]) == (0, 0)
 
 
+def test_mediana_con_cantidad_par_promedia_los_centrales():
+    # Los 9 puntos ubicados del vuelo 4 (20261111_160740), más una manual y una aproximada.
+    def fila(err_real, ubicada=True, manual=False):
+        return {'ubicada': ubicada, 'manual': manual, 'err_real': err_real}
+    filas = [fila(e) for e in (257.0, 242.0, 145.0, 44.8, 11.4, 6.3, 7.4, 14.6, 37.4)]
+    filas += [fila(1.0, manual=True), fila(1.0, ubicada=False)]
+    med_cerca, max_cerca, n_cerca, med_todos, n_todos = verdad_sitl.errores_ubicados(filas)
+    assert n_cerca == 4 and abs(med_cerca - 9.4) < 1e-9     # (7.4 + 11.4) / 2, no 11.4
+    assert max_cerca == 14.6
+    assert n_todos == 9 and med_todos == 37.4
+    assert verdad_sitl.errores_ubicados([]) == (None, None, 0, None, 0)
+
+
 def test_marcas_manuales_no_se_agrupan():
     filas = verdad_sitl.comparar(VERDAD, [_pt('1', 10, 't0'), _pt('M1', 10, 't0', True)])
     assert [f['real'] for f in filas] == ['B', 'B']
