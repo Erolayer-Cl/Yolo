@@ -9,7 +9,7 @@ python training/extra_reevaluar_cpu.py --src <VisDrone> --nombre coco    --pesos
 ```
 
 `visdrone_n.pt` es el `best.pt` de `n_final` (SHA-256
-`dda24445368c99e99ab78e4acc9aa24fca5aaae083f9da647becfd481facdb68`, release `v1.0-eval02`).
+`dda24445368c99e99ab78e4acc9aa24fca5aaae083f9da647becfd481facdb68`, `models/visdrone_n.pt`).
 
 | Modelo | Precisión | Recall | Recall <16 px | Falsas alarmas/img | Original (RTX 4060, `resumen.json`) |
 |---|---|---|---|---|---|
