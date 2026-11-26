@@ -1,3 +1,7 @@
+> **Reemplazado.** Este era el esqueleto del informe de la EVAL-02. El informe final
+> (27-11-2026) se entrega en el Aula Virtual. Algunas cifras de abajo son anteriores a la
+> corrección de la mediana del 26-11: las vigentes están en [VALIDACION.md](VALIDACION.md) §3.
+
 # Informe técnico: detección y geolocalización de personas desde un dron
 
 > **Esqueleto del informe de EVAL-02 (27-11-2026).** Las secciones siguen los criterios de

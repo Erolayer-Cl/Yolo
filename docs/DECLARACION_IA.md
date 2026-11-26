@@ -9,9 +9,9 @@ Integrantes y aporte principal de cada uno:
 
 | Integrante | Aporte principal |
 |---|---|
-| Ignacio Ibañez | Programador: código del sistema y pruebas en la simulación de vuelo (SITL) |
-| Gerardo González | Entrenamiento del modelo que detecta personas: datos, entrenamiento y resultados |
-| Cristofer Jeria | Mapa y alertas: cómo funciona el sistema completo (arquitectura) |
+| Ignacio Ibañez | Programador del sistema y ejecutor de los pesos del modelo |
+| Gerardo González | Construcción y limpieza del dataset, gestión de los hiperparámetros y código de entrenamiento |
+| Cristofer Jeria | Apoyo en las tareas del proyecto, redacción del informe y de la presentación |
 
 ## Herramienta usada
 
@@ -54,11 +54,11 @@ En qué se usó:
 ## Cómo se verificó lo que produjo la IA
 
 Lo verificable desde el repo:
-- 153 tests unitarios en verde (`docs/resultados/pytest.txt`).
+- 154 tests unitarios en verde (`docs/resultados/pytest.txt`).
 - Evaluación en VisDrone test-dev con el mismo `detect_persons()` que corre en vuelo
   (sin una copia aparte).
 - Vuelos en SITL comparados con la posición real de las personas (`verdad_sitl.py`). Esa
-  comparación **mostró problemas** (error de ubicación ~12 m, subestimado): se documentan
+  comparación **mostró problemas** (error de ubicación de 7–11 m de mediana, subestimado): se documentan
   en [VALIDACION.md](VALIDACION.md), no se ocultan.
 - Las licencias de terceros se revisaron en sus repositorios oficiales
   ([RIESGOS_Y_ETICA.md](RIESGOS_Y_ETICA.md) §6).

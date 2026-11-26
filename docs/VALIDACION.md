@@ -6,7 +6,7 @@ y copiado en [`resultados/`](resultados/).
 
 | Nivel | Qué mide | Datos | Herramienta | Estado |
 |---|---|---|---|---|
-| 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 153 tests en verde |
+| 1. Lógica | Que cada pieza haga lo que dice (tiling, NMS, tracker, deduplicación, geolocalización, mapa) | Casos sintéticos, incluidos casos límite | `pytest` (sin ROS) | ✅ 154 tests en verde |
 | 2. Detector | Cuántas personas encuentra y cuántas inventa | VisDrone test-dev, 1610 imágenes etiquetadas | `training/e3_evaluar.py` | ✅ hecho |
 | 3. Sistema en SITL | Si el punto del mapa cae donde está la persona | Vuelos en Unreal + posición real de cada actor | `scripts/verdad_sitl.py` | ⚠️ 4 vuelos, resultados malos de ubicación (ver abajo) |
 | 4. Dron real | Todo lo anterior con cámara y GPS reales | — | — | ❌ no hecho |
@@ -19,7 +19,7 @@ y copiado en [`resultados/`](resultados/).
 cd src/person_yolo && python3 -m pytest -q test
 ```
 
-Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (153 passed, 2026-11-13).
+Salida guardada: [`resultados/pytest.txt`](resultados/pytest.txt) (154 passed, 2026-11-26).
 
 | Archivo | Qué cubre, incluidos los casos límite |
 |---|---|
@@ -91,10 +91,10 @@ Datos de cada vuelo en [`resultados/sitl/`](resultados/sitl/): `personas.csv`, `
 
 | Vuelo | Versión del código | Duración / altura máx. | Personas encontradas | Puntos marcados | Duplicados | Aproximados (sin posición) | Error real de los ubicados | Error que informa el sistema |
 |---|---|---|---|---|---|---|---|---|
-| `20261110_145432` | `19a97cc` | 192 s / 3.7 m | 2 de 3 | 20 | 3 | 14 lejos de toda persona | mediana 11.6 m, máx 11.9 m | ±1.2–1.3 m |
+| `20261110_145432` | `19a97cc` | 192 s / 3.7 m | 2 de 3 | 20 | 3 | 14 lejos de toda persona | mediana 7.0 m, máx 11.9 m | ±1.2–1.3 m |
 | `20261110_151145` | `f9fdb56` | sin despegar | 0 de 3 | 2 | 0 | 2 (falsas alarmas en tierra) | — | — |
-| `20261110_152146` | `f9fdb56` | 128 s / 33.2 m | 2 de 3 | 7 | 2 | 1 | mediana 11.8 m, máx 14.8 m | ±1.6–17.3 m |
-| `20261111_160740` | `fb9e3cb` | 573 s / 28.3 m | 3 de 3 | 14 (13 + 1 manual) | 1 | 4 (al aterrizar) | mediana 11.4 m, máx 14.6 m | ±2–4 m en los 4 cerca de una persona; ±2–12 m en los 9 ubicados |
+| `20261110_152146` | `f9fdb56` | 128 s / 33.2 m | 2 de 3 | 7 | 2 | 1 | mediana 10.9 m, máx 14.8 m | ±1.6–17.3 m |
+| `20261111_160740` | `fb9e3cb` | 573 s / 28.3 m | 3 de 3 | 14 (13 + 1 manual) | 1 | 4 (al aterrizar) | mediana 9.4 m, máx 14.6 m | ±2–4 m en los 4 cerca de una persona; ±2–12 m en los 9 ubicados |
 
 "Versión del código" es el último commit anterior a la hora del vuelo. Los tres primeros
 son anteriores a `b86618a` (fusión de posiciones y de duplicados); el cuarto ya la tiene.
@@ -113,14 +113,23 @@ marcaron a la vez y eran 3 personas, pero el evaluador asignaba 5 y 7 a la misma
 contaba 2 de 3 personas y 2 duplicados; ahora cuenta 3 de 3 y 1 duplicado. En los vuelos
 1–3 el resumen no cambia (solo cambia a qué persona va algún punto aproximado).
 
+**Corrección del 26-11-2026 (mediana).** Hasta el commit `5178a63`, `verdad_sitl.py`
+tomaba como mediana el valor central de ARRIBA cuando había una cantidad par de puntos
+(`ubic[len(ubic) // 2]`). Con 4 puntos eso daba de más: 11.6, 11.8 y 11.4 m en los vuelos
+1, 3 y 4, en lugar de 7.0, 10.9 y 9.4 m. Ahora usa `statistics.median` (promedia los dos
+centrales), lo prueba `test_mediana_con_cantidad_par_promedia_los_centrales` y los
+`informe.txt` se regeneraron. Además el resumen muestra la mediana de **todos** los
+ubicados, que incluye las falsas alarmas medidas a la persona más cercana: 11.6, 13.3 y
+37.4 m. Las cifras de esta página ya están corregidas; las de la EVAL-01 eran las viejas.
+
 **Lectura:**
-- **El error de ubicación está subestimado.** Con el dron a 33 m, el error real es de
-  unos 12 m, y el sistema dice ±1.6–3.5 m en 4 de sus 6 puntos ubicados. En el vuelo 3 todos los
+- **El error de ubicación está subestimado.** Con el dron a 33 m, el error real de los
+  puntos a ≤ 15 m de una persona tiene una mediana de 10.9 m, y el sistema dice ±1.6–3.5 m en 4 de sus 6 puntos ubicados. En el vuelo 3 todos los
   puntos se corren en promedio **+9.1 m al norte**. Que vayan todos para el mismo lado
   apunta a un error sistemático (pitch de la cámara, retraso de la imagen o altura), no a
   ruido. `scripts/calibrar_geo.py` está hecho para medir ese error con un rosbag y la
   verdad de terreno. **Todavía no se corrió.** El vuelo 4 lo repite con el código
-  actual: a ~25 m, error real de mediana 11.4 m contra ±2–4 m informados, y corrimiento
+  actual: a ~25 m, error real de mediana 9.4 m contra ±2–4 m informados, y corrimiento
   medio **+7.0 m al norte**, +4.7 m al este. Medido con la zona de búsqueda que dibuja
   el mapa (2σ del error informado), la persona real queda dentro en 0 de 4 puntos
   ubicados en el vuelo 4, y en 2 de 4 en los vuelos 1 y 3. Con un error bien calibrado
