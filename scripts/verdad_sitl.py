@@ -30,6 +30,7 @@ import json
 import math
 import os
 import re
+import statistics
 import sys
 from pathlib import Path
 
@@ -173,6 +174,19 @@ def dentro_de_2sigma(filas):
     return sum(1 for r in utiles if r['err_real'] <= 2 * r['error_m']), len(utiles)
 
 
+def errores_ubicados(filas):
+    """Mediana del error real de los puntos ubicados del detector (sin manuales ni
+    aproximados), en dos versiones: solo los que caen a <= FALSA_ALARMA_M de una
+    persona, y todos (estos incluyen falsas alarmas, medidas a la persona más cercana).
+    Devuelve (mediana_cerca, max_cerca, n_cerca, mediana_todos, n_todos); None si no hay.
+    statistics.median promedia los dos centrales cuando la cantidad es par: antes se
+    tomaba ubic[len // 2], el central de ARRIBA, y con 4 puntos daba de más."""
+    todos = [r['err_real'] for r in filas if r['ubicada'] and not r['manual']]
+    cerca = [e for e in todos if e <= FALSA_ALARMA_M]
+    med = lambda xs: statistics.median(xs) if xs else None
+    return med(cerca), (max(cerca) if cerca else None), len(cerca), med(todos), len(todos)
+
+
 def informe(verdad, filas):
     print(f'\nPersonas reales: {len(verdad)} | puntos marcados: {len(filas)}\n')
     print(f'{"#":>3} {"estado":7} {"persona real asignada":28} {"error real":>10} '
@@ -213,9 +227,13 @@ def informe(verdad, filas):
           f'ubicados): {len(filas) - len(reales) - aprox_lejos}')
     print(f'  aproximados lejos de toda persona (puntos sobre el dron, sin valor de '
           f'rescate): {aprox_lejos}')
-    if ubic:
-        print(f'  error real de los ubicados: mediana {ubic[len(ubic) // 2]:.1f} m, '
-              f'máx {ubic[-1]:.1f} m')
+    med_cerca, max_cerca, n_cerca, med_todos, n_todos = errores_ubicados(filas)
+    if n_cerca:
+        print(f'  error real de los ubicados a <= {FALSA_ALARMA_M:.0f} m de una persona '
+              f'({n_cerca}): mediana {med_cerca:.2f} m, máx {max_cerca:.1f} m')
+    if n_todos > n_cerca:
+        print(f'  error real de todos los ubicados ({n_todos}, incluye falsas alarmas): '
+              f'mediana {med_todos:.2f} m')
     dentro, total = dentro_de_2sigma(filas)
     if total:
         print(f'  persona real dentro de la zona de búsqueda (2σ del error informado): '
