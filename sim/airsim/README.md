@@ -36,7 +36,7 @@ lo comprueba y falla si no coinciden.
 | `yolo_cam` `Width` × `Height` | 1920 × 1080 | Tiling del detector (`tiling.tile_size: 640`) | Con ≤ 640 px el tiling no aporta nada y las personas lejanas no se detectan |
 | `yolo_cam` `FOV_Degrees` | 90 | `geolocate.camera_hfov_deg` en `config/sitl.yaml` | Cambiar el YAML, o las personas se ubican mal |
 | `yolo_cam` `Pitch` | -30° | `geolocate.camera_pitch_deg` en `config/sitl.yaml`; `scripts/calibrar_geo.py` | Cambiar el YAML. Con la cámara horizontal (0°) casi ninguna persona lejana se puede ubicar en el suelo |
-| `yolo_cam` `X, Y, Z` | 0.3, 0, -0.1 m | — (geolocate supone la cámara en el centro del dron) | Error de unos cm, despreciable frente al error de ubicación |
+| `yolo_cam` `X, Y, Z` | 0.4, 0, 0.2 m (Z positivo = abajo) | — (geolocate supone la cámara en el centro del dron) | Error de unos cm, despreciable frente al error de ubicación. Antes del 17-11 era 0.3, 0, -0.1: con el FOV de 90° la cámara veía los protectores de las hélices delanteras en los bordes, y YOLO los detectaba como personas. Abajo y adelante quedan fuera de cuadro |
 | `Sensors.down` | distancia, `Pitch -90`, 0.2–40 m, `Z 0.3` | Altura sobre el suelo para ubicar personas: `geolocate.agl_topic: /airsim_node/PX4/distance/down` | Por encima de 40 m de altura no mide y se usa la altura sobre el despegue (supone suelo plano) |
 | `down.ExternalController: false` | — | AirSim lo publica en ROS pero **PX4 no lo recibe**: no cambia el vuelo | Con `true` PX4 lo usaría como telémetro y cambiaría su estimación |
 | `Barometer`, `Imu`, `Gps`, `Magnetometer` | por defecto | PX4 SITL (los necesita para volar) | — |
